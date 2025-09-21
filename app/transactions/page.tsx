@@ -1,0 +1,380 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { motion } from 'framer-motion'
+import { 
+  ArrowUpRight,
+  ArrowDownRight,
+  Search,
+  Filter,
+  Download,
+  Plus,
+  Wallet,
+  History,
+  Calendar,
+  CreditCard
+} from 'lucide-react'
+import { Card } from '@/components/ui/Card'
+import { Button } from '@/components/ui/Button'
+import { Input } from '@/components/ui/Input'
+import { Badge } from '@/components/ui/Badge'
+import { transactionAPI } from '@/lib/api'
+import { formatCurrency } from '@/lib/utils'
+import DashboardLayout from '@/components/DashboardLayout'
+
+interface Transaction {
+  id: string
+  user_id: string
+  group_id?: string
+  type: string
+  amount: number
+  balance_before: number
+  balance_after: number
+  description: string
+  payment_method?: string
+  payment_reference?: string
+  status: string
+  created_at: string
+  updated_at: string
+}
+
+export default function TransactionsPage() {
+  const router = useRouter()
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedType, setSelectedType] = useState('')
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [stats, setStats] = useState({
+    totalTransactions: 0,
+    totalAmount: 0,
+    topUpAmount: 0,
+    spentAmount: 0
+  })
+
+  const transactionTypes = [
+    { value: '', label: 'All' },
+    { value: 'top-up', label: 'Top Up' },
+    { value: 'group_payment', label: 'Pembayaran Grup' },
+    { value: 'withdrawal', label: 'Penarikan' },
+    { value: 'refund', label: 'Refund' }
+  ]
+
+  useEffect(() => {
+    fetchTransactions()
+  }, [page, searchTerm, selectedType])
+
+  const fetchTransactions = async () => {
+    try {
+      setLoading(true)
+      const response = await transactionAPI.getUserTransactions({
+        page,
+        page_size: 20
+      })
+      setTransactions(response.data.transactions || [])
+      setTotalPages(response.data.total_pages || 1)
+      
+      // Calculate stats
+      const allTransactions = response.data.transactions || []
+      const totalAmount = allTransactions.reduce((sum: number, t: Transaction) => sum + t.amount, 0)
+      const topUpAmount = allTransactions
+        .filter((t: Transaction) => t.type === 'top-up')
+        .reduce((sum: number, t: Transaction) => sum + t.amount, 0)
+      const spentAmount = allTransactions
+        .filter((t: Transaction) => ['group_payment', 'withdrawal'].includes(t.type))
+        .reduce((sum: number, t: Transaction) => sum + t.amount, 0)
+      
+      setStats({
+        totalTransactions: response.data.total || 0,
+        totalAmount,
+        topUpAmount,
+        spentAmount
+      })
+    } catch (error) {
+      console.error('Error fetching transactions:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filteredTransactions = transactions.filter(transaction => {
+    const matchesSearch = transaction.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         transaction.type.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesType = !selectedType || transaction.type === selectedType
+    return matchesSearch && matchesType
+  })
+
+  const getTransactionIcon = (type: string) => {
+    switch (type) {
+      case 'top-up':
+        return <ArrowUpRight className="h-4 w-4 text-green-600 dark:text-green-400" />
+      case 'group_payment':
+      case 'withdrawal':
+        return <ArrowDownRight className="h-4 w-4 text-red-600 dark:text-red-400" />
+      case 'refund':
+        return <ArrowUpRight className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+      default:
+        return <History className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+    }
+  }
+
+  const getTransactionColor = (type: string) => {
+    switch (type) {
+      case 'top-up':
+        return 'bg-green-100 dark:bg-green-900'
+      case 'group_payment':
+      case 'withdrawal':
+        return 'bg-red-100 dark:bg-red-900'
+      case 'refund':
+        return 'bg-blue-100 dark:bg-blue-900'
+      default:
+        return 'bg-gray-100 dark:bg-gray-900'
+    }
+  }
+
+  const getTransactionTextColor = (type: string) => {
+    switch (type) {
+      case 'top-up':
+        return 'text-green-600 dark:text-green-400'
+      case 'group_payment':
+      case 'withdrawal':
+        return 'text-red-600 dark:text-red-400'
+      case 'refund':
+        return 'text-blue-600 dark:text-blue-400'
+      default:
+        return 'text-gray-600 dark:text-gray-400'
+    }
+  }
+
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case 'top-up':
+        return 'Top Up'
+      case 'group_payment':
+        return 'Pembayaran Grup'
+      case 'withdrawal':
+        return 'Penarikan'
+      case 'refund':
+        return 'Refund'
+      default:
+        return type
+    }
+  }
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              History Transaksi
+            </h1>
+            <p className="text-gray-600 dark:text-gray-300 mt-2">
+              Lihat semua transaksi dan riwayat pembayaran Anda
+            </p>
+          </div>
+          <Button
+            onClick={() => router.push('/top-up')}
+            className="flex items-center space-x-2"
+          >
+            <Plus className="h-5 w-5" />
+            <span>Top Up Saldo</span>
+          </Button>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <Card className="p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-primary-100 dark:bg-primary-900 rounded-lg">
+                <History className="h-6 w-6 text-primary-600 dark:text-primary-400" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Transaksi</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalTransactions}</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                <ArrowUpRight className="h-6 w-6 text-green-600 dark:text-green-400" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Top Up</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {formatCurrency(stats.topUpAmount)}
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-red-100 dark:bg-red-900 rounded-lg">
+                <ArrowDownRight className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Pengeluaran</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {formatCurrency(stats.spentAmount)}
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                <Wallet className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Net Amount</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {formatCurrency(stats.topUpAmount - stats.spentAmount)}
+                </p>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Search and Filter */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <Input
+                type="text"
+                placeholder="Cari transaksi..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            {transactionTypes.map((type) => (
+              <Button
+                key={type.value}
+                variant={selectedType === type.value ? 'primary' : 'outline'}
+                onClick={() => setSelectedType(type.value)}
+                size="sm"
+              >
+                {type.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {/* Transactions List */}
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+          </div>
+        ) : filteredTransactions.length === 0 ? (
+          <div className="text-center py-12">
+            <History className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+              Tidak ada transaksi
+            </h3>
+            <p className="text-gray-600 dark:text-gray-300">
+              Belum ada transaksi yang ditemukan
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredTransactions.map((transaction) => (
+              <motion.div
+                key={transaction.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Card className="p-6 hover:shadow-lg transition-shadow dark:bg-gray-800">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className={`p-3 rounded-lg ${getTransactionColor(transaction.type)}`}>
+                        {getTransactionIcon(transaction.type)}
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-2 mb-1">
+                          <h3 className="font-semibold text-gray-900 dark:text-white">
+                            {transaction.description}
+                          </h3>
+                          <Badge variant="gray" className="text-xs">
+                            {getTypeLabel(transaction.type)}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
+                          <div className="flex items-center space-x-1">
+                            <Calendar className="h-4 w-4" />
+                            <span>
+                              {new Date(transaction.created_at).toLocaleDateString('id-ID', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          {transaction.payment_method && (
+                            <div className="flex items-center space-x-1">
+                              <CreditCard className="h-4 w-4" />
+                              <span>{transaction.payment_method}</span>
+                            </div>
+                          )}
+                        </div>
+                        {transaction.payment_reference && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Ref: {transaction.payment_reference}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-lg font-bold ${getTransactionTextColor(transaction.type)}`}>
+                        {transaction.type === 'top-up' || transaction.type === 'refund' ? '+' : '-'}
+                        {formatCurrency(transaction.amount)}
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Saldo: {formatCurrency(transaction.balance_after)}
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center space-x-2">
+            <Button
+              variant="outline"
+              onClick={() => setPage(page - 1)}
+              disabled={page === 1}
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-gray-600 dark:text-gray-300">
+              Halaman {page} dari {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              onClick={() => setPage(page + 1)}
+              disabled={page === totalPages}
+            >
+              Next
+            </Button>
+          </div>
+        )}
+      </div>
+    </DashboardLayout>
+  )
+}
