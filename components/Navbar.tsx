@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/Button'
 import ThemeToggle from '@/components/ThemeToggle'
 import { motion } from 'framer-motion'
-import { Menu, X, User, LogOut, Home, Users, Plus, CreditCard } from 'lucide-react'
+import { Menu, X, User, LogOut, Home, Users, Plus, CreditCard, Shield } from 'lucide-react'
 
 interface NavbarProps {
   showAuth?: boolean
@@ -24,8 +24,18 @@ export default function Navbar({ showAuth = true, showUserMenu = true }: NavbarP
   }
 
   const handleAuth = () => {
-    router.push('/')
     setIsMenuOpen(false)
+    
+    if (window.location.pathname === '/') {
+      // If already on home page, scroll to top
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } else {
+      // If not on home page, navigate first then scroll
+      router.push('/')
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }, 500)
+    }
   }
 
   return (
@@ -74,6 +84,16 @@ export default function Navbar({ showAuth = true, showUserMenu = true }: NavbarP
                   <Users className="h-4 w-4 mr-2" />
                   Grup
                 </Button>
+                {user?.is_admin && (
+                  <Button
+                    variant="ghost"
+                    onClick={() => router.push('/admin')}
+                    className="text-gray-600 hover:text-primary-600 dark:text-gray-300 dark:hover:text-primary-400"
+                  >
+                    <Shield className="h-4 w-4 mr-2" />
+                    Admin
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   onClick={() => router.push('/groups/create')}
@@ -168,6 +188,19 @@ export default function Navbar({ showAuth = true, showUserMenu = true }: NavbarP
                     <Users className="h-4 w-4 mr-2" />
                     Grup
                   </Button>
+                  {user?.is_admin && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        router.push('/admin')
+                        setIsMenuOpen(false)
+                      }}
+                      className="w-full justify-start text-gray-600 hover:text-primary-600 dark:text-gray-300 dark:hover:text-primary-400"
+                    >
+                      <Shield className="h-4 w-4 mr-2" />
+                      Admin
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     onClick={() => {

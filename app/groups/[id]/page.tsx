@@ -24,7 +24,7 @@ import {
   Trash2,
   Edit
 } from 'lucide-react'
-import { groupAPI, messageAPI } from '@/lib/api'
+import { groupAPI, messageAPI, paymentAPI } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import { motion } from 'framer-motion'
@@ -50,7 +50,9 @@ interface GroupMember {
   group_id: string
   user_id: string
   status: string
+  user_status: string
   payment_amount: number
+  price_per_member: number
   joined_at: string
   user: {
     id: string
@@ -110,6 +112,7 @@ export default function GroupDetailPage() {
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [copied, setCopied] = useState(false)
   const [members, setMembers] = useState<GroupMember[]>([])
+  const [processingPayment, setProcessingPayment] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -280,6 +283,32 @@ export default function GroupDetailPage() {
       } catch (error) {
         toast.error('Gagal menyalin undangan grup')
       }
+    }
+  }
+
+  const handlePayment = async () => {
+    if (!group || !user) return
+
+    setProcessingPayment(true)
+    try {
+      const amount = group.price_per_member + group.admin_fee
+      const response = await paymentAPI.createGroupPaymentLink({
+        group_id: group.id,
+        amount: amount
+      })
+
+      if (response.data.success && response.data.payment_url) {
+        // Open payment URL in new tab
+        window.open(response.data.payment_url, '_blank')
+        toast.success('Halaman pembayaran dibuka di tab baru')
+      } else {
+        toast.error('Gagal membuat link pembayaran')
+      }
+    } catch (error: any) {
+      console.error('Error creating payment link:', error)
+      toast.error(error.response?.data?.error || 'Gagal membuat link pembayaran')
+    } finally {
+      setProcessingPayment(false)
     }
   }
 
@@ -551,9 +580,6 @@ export default function GroupDetailPage() {
                                 <Crown className="h-4 w-4 text-yellow-500" />
                               )}
                             </div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                              ID: {member.user_id}
-                            </p>
                             <p className="text-xs text-gray-500 dark:text-gray-400">
                               Bergabung {member.joined_at ? new Date(member.joined_at).toLocaleDateString('id-ID') : '-'}
                             </p>
@@ -562,12 +588,12 @@ export default function GroupDetailPage() {
                         <div className="flex items-center space-x-2">
                           <div className="text-right">
                             <p className="text-sm font-medium text-gray-900 dark:text-white">
-                              {formatCurrency(member.payment_amount)}
+                              {formatCurrency(member.price_per_member)}
                             </p>
                             <Badge 
-                              variant={member.status === 'paid' ? 'success' : 'warning'}
+                              variant={member.user_status === 'paid' ? 'success' : 'warning'}
                             >
-                              {member.status === 'paid' ? 'Lunas' : 'Pending'}
+                              {member.user_status === 'paid' ? 'Lunas' : 'Pending'}
                             </Badge>
                           </div>
                           {isOwner && member.user_id !== group?.owner_id && (
@@ -777,9 +803,14 @@ export default function GroupDetailPage() {
                   </Button>
                 )}
                 {isMember && (
-                  <Button variant="outline" className="w-full text-sm sm:text-base">
+                  <Button 
+                    variant="outline" 
+                    className="w-full text-sm sm:text-base"
+                    onClick={handlePayment}
+                    disabled={processingPayment}
+                  >
                     <DollarSign className="h-4 w-4 mr-2" />
-                    Bayar Sekarang
+                    {processingPayment ? 'Memproses...' : 'Bayar Sekarang'}
                   </Button>
                 )}
                 <Button variant="outline" className="w-full text-sm sm:text-base" onClick={() => setShowInviteModal(true)}>

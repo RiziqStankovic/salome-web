@@ -16,9 +16,7 @@ import {
   Bell,
   Search,
   User,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight
+  ChevronDown
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { generateAvatarUrl } from '@/lib/utils'
@@ -38,7 +36,6 @@ const navigation = [
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const { user, logout } = useAuth()
   const router = useRouter()
@@ -47,19 +44,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const handleLogout = () => {
     logout()
   }
-
-  // Load sidebar state from localStorage
-  useEffect(() => {
-    const savedState = localStorage.getItem('sidebarCollapsed')
-    if (savedState !== null) {
-      setSidebarCollapsed(JSON.parse(savedState))
-    }
-  }, [])
-
-  // Save sidebar state to localStorage
-  useEffect(() => {
-    localStorage.setItem('sidebarCollapsed', JSON.stringify(sidebarCollapsed))
-  }, [sidebarCollapsed])
 
   return (
     <VerificationGuard>
@@ -121,10 +105,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       </div>
 
       {/* Desktop sidebar */}
-      <div className={cn(
-        "hidden lg:fixed lg:inset-y-0 lg:flex lg:flex-col transition-all duration-300",
-        sidebarCollapsed ? "lg:w-16" : "lg:w-64"
-      )}>
+      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
         <div className="flex flex-col flex-grow bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
           <div className="flex h-16 items-center px-4 justify-between">
             <div 
@@ -134,24 +115,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <div className="w-8 h-8 bg-gradient-to-r from-primary-600 to-secondary-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-lg">S</span>
               </div>
-              {!sidebarCollapsed && (
-                <span className="text-xl font-bold text-gray-900 dark:text-white">SALOME</span>
-              )}
-            </div>
-            <div className="flex items-center space-x-2">
-              <ThemeToggle />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                className="hidden lg:flex"
-              >
-                {sidebarCollapsed ? (
-                  <ChevronRight className="h-4 w-4" />
-                ) : (
-                  <ChevronLeft className="h-4 w-4" />
-                )}
-              </Button>
+              <span className="text-xl font-bold text-gray-900 dark:text-white">SALOME</span>
             </div>
           </div>
           <nav className="flex-1 space-y-1 px-2 py-4">
@@ -162,15 +126,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   key={item.name}
                   variant={isActive ? 'primary' : 'ghost'}
                   className={cn(
-                    'w-full justify-start',
-                    sidebarCollapsed ? 'px-2' : 'px-3',
+                    'w-full justify-start px-3',
                     isActive ? 'bg-primary-50 dark:bg-primary-900 text-primary-700 dark:text-primary-300' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700'
                   )}
                   onClick={() => router.push(item.href)}
-                  title={sidebarCollapsed ? item.name : undefined}
                 >
-                  <item.icon className={cn("h-5 w-5", !sidebarCollapsed && "mr-3")} />
-                  {!sidebarCollapsed && item.name}
+                  <item.icon className="h-5 w-5 mr-3" />
+                  {item.name}
                 </Button>
               )
             })}
@@ -179,31 +141,23 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="relative">
               <Button
                 variant="ghost"
-                className={cn(
-                  "w-full justify-start p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700",
-                  sidebarCollapsed && "px-2"
-                )}
+                className="w-full justify-start p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700"
                 onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-                title={sidebarCollapsed ? `${user?.full_name} (${user?.email})` : undefined}
               >
                 <div className="w-8 h-8 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center">
                   <span className="text-primary-600 dark:text-primary-400 font-medium text-sm">
                     {user?.full_name?.charAt(0)}
                   </span>
                 </div>
-                {!sidebarCollapsed && (
-                  <>
-                    <div className="flex-1 text-left ml-3">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                        {user?.full_name}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                        {user?.email}
-                      </p>
-                    </div>
-                    <ChevronDown className="h-4 w-4" />
-                  </>
-                )}
+                <div className="flex-1 text-left ml-3">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                    {user?.full_name}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    {user?.email}
+                  </p>
+                </div>
+                <ChevronDown className="h-4 w-4" />
               </Button>
 
               {profileMenuOpen && (
@@ -238,36 +192,34 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       </div>
 
       {/* Main content */}
-      <div className={cn(
-        "transition-all duration-300",
-        sidebarCollapsed ? "lg:pl-16" : "lg:pl-64"
-      )}>
+      <div className="lg:pl-64">
         {/* Top bar */}
-        <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
+        <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white dark:bg-gray-800 px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
+          {/* Mobile menu button */}
           <Button
             variant="ghost"
             size="sm"
             className="lg:hidden"
             onClick={() => setSidebarOpen(true)}
+            title="Open sidebar"
           >
             <Menu className="h-6 w-6" />
           </Button>
 
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
             <div className="relative flex flex-1 items-center">
-              <div className="relative w-full">
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                  <Search className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  className="block w-full rounded-md border-0 py-1.5 pl-10 pr-3 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary-600 sm:text-sm sm:leading-6"
-                  placeholder="Cari grup, subscription..."
-                  type="search"
-                />
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                <Search className="h-5 w-5 text-gray-400" />
               </div>
+              <input
+                className="block w-full rounded-md border-0 py-1.5 pl-10 pr-3 text-gray-900 dark:text-white dark:bg-gray-700 ring-1 ring-inset ring-gray-300 dark:ring-gray-600 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary-600 sm:text-sm sm:leading-6"
+                placeholder="Cari grup, subscription..."
+                type="search"
+              />
             </div>
             <div className="flex items-center gap-x-4 lg:gap-x-6">
-              <Button variant="ghost" size="sm">
+              <ThemeToggle />
+              <Button variant="ghost" size="sm" title="Notifications">
                 <Bell className="h-5 w-5" />
               </Button>
             </div>

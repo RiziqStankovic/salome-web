@@ -91,6 +91,9 @@ export const groupAPI = {
   removeMember: (groupId: string, userId: string) => 
     api.delete(`/groups/${groupId}/members/${userId}`),
   
+  leaveGroup: (groupId: string) => 
+    api.delete(`/groups/${groupId}/leave`),
+  
   getGroupMembers: (groupId: string) => 
     api.get(`/groups/${groupId}/members`),
 }
@@ -119,6 +122,12 @@ export const paymentAPI = {
   createPayment: (data: any) => 
     api.post('/payments', data),
   
+  createGroupPaymentLink: (data: {
+    group_id: string
+    amount: number
+  }) => 
+    api.post('/payments/group-payment-link', data),
+  
   getUserPayments: () => 
     api.get('/payments'),
   
@@ -144,6 +153,9 @@ export const appAPI = {
     const queryString = searchParams.toString()
     return api.get(`/apps${queryString ? `?${queryString}` : ''}`)
   },
+  
+  getAppById: (appId: string) => 
+    api.get(`/apps/${appId}`),
   
   getAppCategories: () => 
     api.get('/apps/categories'),
@@ -206,4 +218,21 @@ export const transactionAPI = {
     reference?: string
   }) => 
     api.post('/transactions/top-up', data),
+}
+
+// Admin API endpoints
+export const adminAPI = {
+  updateUserStatus: (data: {
+    user_id: string
+    group_id: string
+    new_status: string
+    removed_reason?: string
+  }) => 
+    api.put('/admin/users/status', data),
+  
+  updateGroupStatus: (data: {
+    group_id: string
+    new_status: string
+  }) => 
+    api.put('/admin/groups/status', data),
 }

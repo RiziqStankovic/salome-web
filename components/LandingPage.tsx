@@ -277,7 +277,7 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+      <section className="py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
         {/* Background Effects */}
         <div className="absolute inset-0 bg-gradient-to-br from-primary-50 via-white to-secondary-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900" />
         <div className="absolute top-0 left-0 w-full h-full">
@@ -287,19 +287,19 @@ export default function LandingPage() {
         </div>
 
         <div className="max-w-7xl mx-auto relative">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
             <motion.div 
               initial={{ x: -50, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               transition={{ duration: 0.8 }}
-              className="space-y-8"
+              className="space-y-6 sm:space-y-8"
             >
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 <motion.div
                   initial={{ y: 20, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ duration: 0.6, delay: 0.2 }}
-                  className="flex items-center space-x-2 mb-4"
+                  className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 mb-4"
                 >
                   <div className="flex items-center space-x-1 bg-primary-100 text-primary-700 px-3 py-1 rounded-full text-sm font-medium">
                     <Sparkles className="h-4 w-4" />
@@ -315,7 +315,7 @@ export default function LandingPage() {
                   initial={{ y: 30, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ duration: 0.8, delay: 0.3 }}
-                  className="text-5xl lg:text-7xl font-bold text-gray-900 dark:text-white leading-tight"
+                  className="text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-bold text-gray-900 dark:text-white leading-tight"
                 >
                   Patungan{' '}
                   <span className="bg-gradient-to-r from-primary-600 via-secondary-600 to-primary-600 bg-clip-text text-transparent animate-gradient bg-[length:200%_auto]">
@@ -328,10 +328,10 @@ export default function LandingPage() {
                   initial={{ y: 20, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ duration: 0.6, delay: 0.5 }}
-                  className="text-xl text-gray-600 dark:text-gray-300 leading-relaxed max-w-2xl"
+                  className="text-lg sm:text-xl text-gray-600 dark:text-gray-300 leading-relaxed max-w-2xl"
                 >
                   Hemat hingga <span className="font-bold text-primary-600">90%</span> dengan patungan subscription aplikasi favorit bersama teman-teman. 
-                  <span className="block mt-2 text-lg font-medium text-gray-700 dark:text-gray-300">Aman, mudah, dan terpercaya.</span>
+                  <span className="block mt-2 text-base sm:text-lg font-medium text-gray-700 dark:text-gray-300">Aman, mudah, dan terpercaya.</span>
                 </motion.p>
               </div>
 
@@ -339,23 +339,23 @@ export default function LandingPage() {
                 initial={{ y: 30, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 0.6, delay: 0.7 }}
-                className="flex flex-col sm:flex-row gap-4"
+                className="flex flex-col sm:flex-row gap-3 sm:gap-4"
               >
                 <Button
                   size="lg"
                   onClick={() => document.getElementById('auth-form')?.scrollIntoView({ behavior: 'smooth' })}
-                  className="bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 text-white px-8 py-4 text-lg hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
+                  className="bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 text-white px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
                 >
-                  <Rocket className="mr-2 h-5 w-5" />
+                  <Rocket className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
                   Mulai Sekarang
-                  <ArrowRight className="ml-2 h-5 w-5" />
+                  <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
                 <Button
                   variant="outline"
                   size="lg"
-                  className="px-8 py-4 text-lg hover:scale-105 transition-all duration-200 border-2"
+                  className="px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg hover:scale-105 transition-all duration-200 border-2"
                 >
-                  <Target className="mr-2 h-5 w-5" />
+                  <Target className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
                   Lihat Demo
                 </Button>
               </motion.div>
@@ -364,7 +364,7 @@ export default function LandingPage() {
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 0.6, delay: 0.9 }}
-                className="flex items-center space-x-8 pt-8"
+                className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-8 pt-6 sm:pt-8"
               >
                 {stats.map((stat, index) => (
                   <motion.div 
@@ -373,26 +373,26 @@ export default function LandingPage() {
                     whileHover={{ scale: 1.05 }}
                     transition={{ duration: 0.2 }}
                   >
-                    <div className="text-3xl font-bold text-primary-600 dark:text-primary-400">{stat.value}</div>
-                    <div className="text-sm text-gray-600 dark:text-gray-300">{stat.label}</div>
+                    <div className="text-2xl sm:text-3xl font-bold text-primary-600 dark:text-primary-400">{stat.value}</div>
+                    <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">{stat.label}</div>
                   </motion.div>
                 ))}
               </motion.div>
             </motion.div>
 
             {/* Auth Form */}
-            <div id="auth-form" className="lg:pl-12">
-              <Card className="p-8 max-w-md mx-auto">
-                <div className="text-center mb-8">
-                  <h2 className="text-2xl font-bold text-gray-900">
+            <div id="auth-form" className="lg:pl-12 mt-8 lg:mt-0">
+              <Card className="p-6 sm:p-8 max-w-md mx-auto">
+                <div className="text-center mb-6 sm:mb-8">
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
                     {isLogin ? 'Masuk ke SALOME' : 'Daftar ke SALOME'}
                   </h2>
-                  <p className="text-gray-600 mt-2">
+                  <p className="text-sm sm:text-base text-gray-600 mt-2">
                     {isLogin ? 'Selamat datang kembali!' : 'Bergabunglah dengan komunitas kami'}
                   </p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+                <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6" noValidate>
                   {/* Error Message */}
                   {error && (
                     <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center">
@@ -635,12 +635,12 @@ export default function LandingPage() {
                       className="flex-1"
                     >
                       <Button
-                        onClick={() => router.push('/groups/create')}
+                        onClick={() => router.push(`/app/${app.id}`)}
                         className="w-full group-hover:shadow-lg transition-all duration-300"
                         size="sm"
                       >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Buat Grup
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Detail
                       </Button>
                     </motion.div>
                     <motion.div

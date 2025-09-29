@@ -1,428 +1,565 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
-import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
-import Navbar from '@/components/Navbar'
+import { Input } from '@/components/ui/Input'
 import { 
+  ArrowLeft, 
+  Search, 
   Users, 
-  UserPlus, 
+  Clock, 
   Shield, 
+  CheckCircle, 
+  ExternalLink,
+  Play,
+  Music,
+  Video,
+  Smartphone,
+  Globe,
   CreditCard,
+  Calendar,
+  Info,
   AlertCircle,
-  Loader2,
-  ArrowLeft,
+  Zap,
+  Heart,
+  TrendingUp,
+  DollarSign,
+  Percent,
+  Calculator,
+  Filter,
+  MapPin,
   Star,
-  Clock,
-  CheckCircle
+  Lock,
+  Unlock
 } from 'lucide-react'
-import { formatCurrency } from '@/lib/utils'
-import { groupAPI } from '@/lib/api'
-import toast from 'react-hot-toast'
 import { motion } from 'framer-motion'
+import { groupAPI, appAPI } from '@/lib/api'
+import { formatCurrency } from '@/lib/currency'
 
 interface Group {
   id: string
-  name: string
+  name?: string
   description?: string
   app_id: string
+  app_name?: string
+  app_category?: string
+  app_icon_url?: string
   max_members: number
   current_members: number
   price_per_member: number
-  admin_fee: number
   total_price: number
-  status: string
   invite_code: string
-  owner_id: string
-  expires_at?: string
+  is_public: boolean
   created_at: string
-  is_popular?: boolean
+  host_name?: string
+  host_rating?: number
+  status: string
+  group_status: string
+  all_paid_at?: string
   app: {
-    id: string
-    name: string
-    description: string
-    category: string
     icon_url: string
+    name: string
+    category: string
   }
-  owner: {
+  owner?: {
+    id: string
     full_name: string
-    email: string
   }
 }
 
-export default function JoinGroupPage() {
-  const { user, loading: authLoading } = useAuth()
+interface App {
+  id: string
+  name: string
+  description: string
+  category: string
+  icon_url: string
+  website_url: string
+  total_members: number
+  total_price: number
+  is_popular: boolean
+}
+
+export default function JoinPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  
   const [groups, setGroups] = useState<Group[]>([])
+  const [apps, setApps] = useState<App[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [appId, setAppId] = useState<string | null>(null)
-  const [appName, setAppName] = useState<string>('')
-  const [joiningGroup, setJoiningGroup] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedApp, setSelectedApp] = useState<string>('')
+  const [showFilters, setShowFilters] = useState(false)
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'price_low' | 'price_high' | 'members'>('newest')
+  const [filteredGroups, setFilteredGroups] = useState<Group[]>([])
+
+  const appId = searchParams.get('app')
 
   useEffect(() => {
-    if (authLoading) return
+    fetchData()
+  }, [])
 
-    const app = searchParams.get('app')
-    if (app) {
-      setAppId(app)
-      fetchGroupsByApp(app)
+  useEffect(() => {
+    if (appId) {
+      setSelectedApp(appId)
+      fetchGroups(appId)
     } else {
-      setError('Parameter app tidak ditemukan')
-      setLoading(false)
+      fetchGroups()
     }
-  }, [authLoading, searchParams, router])
+  }, [appId])
 
-  const fetchGroupsByApp = async (appId: string) => {
+  // Search and filter effect
+  useEffect(() => {
+    let filtered = groups
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(group => {
+        const query = searchQuery.toLowerCase()
+        return (group.name && group.name.toLowerCase().includes(query)) ||
+               (group.description && group.description.toLowerCase().includes(query)) ||
+               (group.app_name && group.app_name.toLowerCase().includes(query)) ||
+               (group.app_category && group.app_category.toLowerCase().includes(query))
+      })
+    }
+
+    // Apply app filter
+    if (selectedApp) {
+      filtered = filtered.filter(group => group.app_id === selectedApp)
+    }
+
+    // Apply sorting
+    filtered = [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'newest':
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        case 'oldest':
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        case 'price_low':
+          return a.price_per_member - b.price_per_member
+        case 'price_high':
+          return b.price_per_member - a.price_per_member
+        case 'members':
+          return b.current_members - a.current_members
+        default:
+          return 0
+      }
+    })
+
+    setFilteredGroups(filtered)
+  }, [groups, searchQuery, selectedApp, sortBy])
+
+  const fetchData = async () => {
     try {
       setLoading(true)
-      setError(null)
-      const response = await groupAPI.getPublicGroups({ 
-        page: 1, 
-        page_size: 1000,
-        app_id: appId 
-      })
+      const [groupsResponse, appsResponse] = await Promise.all([
+        groupAPI.getPublicGroups(),
+        appAPI.getApps({ popular: true, page_size: 50 })
+      ])
       
-      if (response.data.groups) {
-        setGroups(response.data.groups)
-        // Set app name from first group if available
-        if (response.data.groups.length > 0 && response.data.groups[0].app) {
-          setAppName(response.data.groups[0].app.name)
-        }
-      } else {
-        setGroups([])
-      }
-    } catch (error: any) {
-      console.error('Error fetching groups:', error)
-      setError('Gagal memuat grup. Silakan coba lagi.')
+      setGroups(groupsResponse.data.groups || [])
+      setApps(appsResponse.data.apps || [])
+    } catch (err: any) {
+      console.error('Failed to fetch data:', err)
+      setError(err.response?.data?.error || 'Failed to load data')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleJoinGroup = async (inviteCode: string) => {
-    // Check if user is logged in
-    if (!user) {
-      toast.error('Silakan daftar atau login terlebih dahulu untuk bergabung dengan grup')
-      router.push('/?redirect=' + encodeURIComponent(window.location.pathname))
-      return
-    }
-
+  const fetchGroups = async (appId?: string) => {
     try {
-      setJoiningGroup(inviteCode)
-      await groupAPI.joinGroup(inviteCode)
-      toast.success('Berhasil bergabung dengan grup!')
-      router.push('/dashboard')
-    } catch (error: any) {
-      console.error('Error joining group:', error)
-      if (error.response?.status === 401) {
-        toast.error('Sesi Anda telah berakhir. Silakan login kembali.')
-        router.push('/?redirect=' + encodeURIComponent(window.location.pathname))
-      } else if (error.response?.status === 404) {
-        toast.error('Grup tidak ditemukan atau sudah penuh')
-      } else if (error.response?.status === 400) {
-        toast.error('Anda sudah bergabung dengan grup ini')
-      } else {
-        toast.error(error.response?.data?.error || 'Gagal bergabung dengan grup')
-      }
+      setLoading(true)
+      const response = await groupAPI.getPublicGroups({ app_id: appId })
+      setGroups(response.data.groups || [])
+    } catch (err: any) {
+      console.error('Failed to fetch groups:', err)
+      setError(err.response?.data?.error || 'Failed to load groups')
     } finally {
-      setJoiningGroup(null)
+      setLoading(false)
     }
   }
 
-  if (authLoading) {
+  const handleAppChange = (appId: string) => {
+    setSelectedApp(appId)
+    fetchGroups(appId)
+  }
+
+  const getCategoryIcon = (category: string) => {
+    if (!category) return <Globe className="h-5 w-5" />
+    
+    switch (category.toLowerCase()) {
+      case 'music':
+        return <Music className="h-5 w-5" />
+      case 'entertainment':
+        return <Video className="h-5 w-5" />
+      case 'productivity':
+        return <Smartphone className="h-5 w-5" />
+      case 'design':
+        return <Zap className="h-5 w-5" />
+      case 'communication':
+        return <Users className="h-5 w-5" />
+      case 'development':
+        return <Globe className="h-5 w-5" />
+      default:
+        return <Globe className="h-5 w-5" />
+    }
+  }
+
+  const getCategoryColor = (category: string) => {
+    if (!category) return 'from-gray-500 to-gray-600'
+    
+    switch (category.toLowerCase()) {
+      case 'music':
+        return 'from-green-500 to-green-600'
+      case 'entertainment':
+        return 'from-red-500 to-red-600'
+      case 'productivity':
+        return 'from-blue-500 to-blue-600'
+      case 'design':
+        return 'from-purple-500 to-purple-600'
+      case 'communication':
+        return 'from-indigo-500 to-indigo-600'
+      case 'development':
+        return 'from-orange-500 to-orange-600'
+      default:
+        return 'from-gray-500 to-gray-600'
+    }
+  }
+
+  const getGroupStatusInfo = (groupStatus: string) => {
+    switch (groupStatus) {
+      case 'open':
+        return { text: 'Open', variant: 'success' as const, color: 'text-green-600' }
+      case 'private':
+        return { text: 'Private', variant: 'gray' as const, color: 'text-gray-600' }
+      case 'full':
+        return { text: 'Full', variant: 'warning' as const, color: 'text-yellow-600' }
+      case 'paid_group':
+        return { text: 'Active', variant: 'success' as const, color: 'text-green-600' }
+      case 'closed':
+        return { text: 'Closed', variant: 'gray' as const, color: 'text-gray-600' }
+      default:
+        return { text: 'Unknown', variant: 'gray' as const, color: 'text-gray-600' }
+    }
+  }
+
+
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-secondary-50 dark:from-gray-900 dark:to-gray-800">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-          className="text-center"
-        >
-          <Loader2 className="h-8 w-8 animate-spin text-primary-600 mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-gray-300">Memuat...</p>
-        </motion.div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary-600 border-t-transparent mx-auto mb-4"></div>
+          <p className="text-slate-600 dark:text-slate-400">Loading groups...</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 dark:from-gray-900 dark:to-gray-800">
-      {/* Navbar */}
-      <Navbar showAuth={false} showUserMenu={true} />
-
-      {/* Background Effects */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-primary-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-float" />
-        <div className="absolute top-40 right-10 w-72 h-72 bg-secondary-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-float" style={{ animationDelay: '2s' }} />
-        <div className="absolute -bottom-8 left-1/2 w-72 h-72 bg-primary-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-float" style={{ animationDelay: '4s' }} />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+      {/* Header */}
+      <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-4">
+              <Button
+                variant="ghost"
+                onClick={() => router.back()}
+                className="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                <ArrowLeft className="h-5 w-5 mr-2" />
+                Back
+              </Button>
+              <div>
+                <h1 className="text-xl font-bold text-slate-900 dark:text-white">Join Group</h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Find and join groups to share subscriptions</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowFilters(!showFilters)}
+                className="border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+              >
+                <Filter className="h-4 w-4 mr-2" />
+                Filters
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Back Button */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-6"
-        >
-          <Button
-            variant="ghost"
-            onClick={() => router.back()}
-            className="text-gray-600 hover:text-primary-600 dark:text-gray-300 dark:hover:text-primary-400"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Kembali
-          </Button>
-        </motion.div>
-
-        {/* Header */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Search and Filters */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
-          className="text-center mb-12"
+          transition={{ duration: 0.6 }}
+          className="mb-8"
         >
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
-            Bergabung dengan Grup
-          </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto mb-4">
-            {appName ? `Pilih grup ${appName} yang ingin Anda ikuti` : 'Pilih grup yang ingin Anda ikuti dan mulai berhemat bersama teman-teman'}
-          </p>
-          {!user && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              className="inline-flex items-center px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-blue-700 dark:text-blue-300"
-            >
-              <AlertCircle className="h-4 w-4 mr-2" />
-              <span className="text-sm font-medium">
-                Silakan daftar atau login untuk bergabung dengan grup
-              </span>
-            </motion.div>
-          )}
-        </motion.div>
-
-        {/* Error State */}
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
-            className="max-w-2xl mx-auto mb-8"
-          >
-            <Card className="p-6 border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800">
-              <div className="flex items-center space-x-3">
-                <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
-                <div>
-                  <h3 className="text-lg font-semibold text-red-800 dark:text-red-200">
-                    Terjadi Kesalahan
-                  </h3>
-                  <p className="text-red-600 dark:text-red-300">{error}</p>
+          <Card className="p-6 border-0 shadow-xl">
+            <div className="grid md:grid-cols-3 gap-4">
+              {/* Search Input */}
+              <div className="md:col-span-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
+                  <Input
+                    type="text"
+                    placeholder="Search groups by name, description, or app..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 pr-4 py-3 border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  />
                 </div>
               </div>
-            </Card>
-          </motion.div>
-        )}
 
-        {/* Loading State */}
-        {loading && (
+              {/* App Filter */}
+              <div>
+                <select
+                  value={selectedApp}
+                  onChange={(e) => handleAppChange(e.target.value)}
+                  className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                >
+                  <option value="">All Apps</option>
+                  {apps.map((app) => (
+                    <option key={app.id} value={app.id}>
+                      {app.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Advanced Filters */}
+            {showFilters && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                transition={{ duration: 0.3 }}
+                className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700"
+              >
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Sort By
+                    </label>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as any)}
+                      className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    >
+                      <option value="newest">Newest First</option>
+                      <option value="oldest">Oldest First</option>
+                      <option value="price_low">Price: Low to High</option>
+                      <option value="price_high">Price: High to Low</option>
+                      <option value="members">Most Members</option>
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      onClick={() => setShowFilters(false)}
+                      className="w-full bg-primary-600 hover:bg-primary-700 text-white"
+                    >
+                      <Search className="h-4 w-4 mr-2" />
+                      Apply Filters
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </Card>
+        </motion.div>
+
+        {/* Results */}
+        <div className="space-y-6">
+          {error && (
+            <Card className="p-6 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
+              <div className="flex items-center space-x-3">
+                <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                <p className="text-red-800 dark:text-red-200">{error}</p>
+              </div>
+            </Card>
+          )}
+
+          {filteredGroups.length === 0 ? (
+            <Card className="p-12 text-center">
+              <div className="w-20 h-20 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Users className="h-10 w-10 text-slate-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+                No groups found
+              </h3>
+              <p className="text-slate-600 dark:text-slate-400 mb-6">
+                {searchQuery || selectedApp 
+                  ? 'Try adjusting your search criteria or create a new group.'
+                  : 'No public groups are available at the moment.'
+                }
+              </p>
+              <Button
+                onClick={() => router.push('/groups/create')}
+                className="bg-primary-600 hover:bg-primary-700 text-white"
+              >
+                <Users className="h-4 w-4 mr-2" />
+                Create Group
+              </Button>
+            </Card>
+          ) : (
+            <div className="grid lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredGroups.map((group, index) => (
+                <motion.div
+                  key={group.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: index * 0.1 }}
+                >
+                  <Card className="p-6 border-0 shadow-xl hover:shadow-2xl transition-all duration-300 group hover:scale-105">
+                    {/* Header */}
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300">
+                          {group.app?.icon_url ? (
+                            <img 
+                              src={group.app.icon_url} 
+                              alt={group.app.name || 'App'}
+                              className="w-8 h-8 rounded-lg"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none'
+                                e.currentTarget.nextElementSibling?.classList.remove('hidden')
+                              }}
+                            />
+                          ) : null}
+                          <div className={`w-8 h-8 bg-gradient-to-r ${getCategoryColor(group.app?.category || group.app_category || '')} rounded-lg flex items-center justify-center text-white ${group.app?.icon_url ? 'hidden' : ''}`}>
+                            {getCategoryIcon(group.app?.category || group.app_category || '')}
+                          </div>
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-slate-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                            {group.name || 'Unnamed Group'}
+                          </h3>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">{group.app?.name || group.app_name || 'Unknown App'}</p>
+                        </div>
+                      </div>
+                      <Badge
+                        variant={getGroupStatusInfo(group.group_status || group.status).variant}
+                        className="flex items-center"
+                      >
+                        <Users className="h-3 w-3 mr-1" />
+                        {getGroupStatusInfo(group.group_status || group.status).text}
+                      </Badge>
+                    </div>
+
+                    {/* Description */}
+                    <p className="text-slate-600 dark:text-slate-300 text-sm mb-4 line-clamp-2">
+                      {group.description || 'No description available'}
+                    </p>
+
+                    {/* Stats */}
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div className="text-center p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
+                        <div className="text-lg font-bold text-slate-900 dark:text-white">
+                          {group.current_members}/{group.max_members}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">Members</div>
+                      </div>
+                      <div className="text-center p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
+                        <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                          {formatCurrency(group.price_per_member)}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">Per Month</div>
+                      </div>
+                    </div>
+
+                    {/* Subscription Status */}
+                    {group.group_status === 'paid_group' && group.all_paid_at && (
+                      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 mb-4">
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                          <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                            Subscription Active
+                          </span>
+                        </div>
+                        <p className="text-xs text-green-600 dark:text-green-300 mt-1">
+                          Started on {new Date(group.all_paid_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Host Info */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-8 h-8 bg-slate-200 dark:bg-slate-600 rounded-full flex items-center justify-center">
+                          <Users className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-slate-900 dark:text-white">
+                            {group.owner?.full_name || group.host_name || 'Unknown Host'}
+                          </div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                            Host
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                        {new Date(group.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="space-y-2">
+                      <Button
+                        onClick={() => router.push(`/join/${group.invite_code}`)}
+                        className="w-full bg-primary-600 hover:bg-primary-700 text-white"
+                      >
+                        <Users className="h-4 w-4 mr-2" />
+                        Join Group
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => router.push(`/app/${group.app_id}`)}
+                        className="w-full border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Detail
+                      </Button>
+                    </div>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Pagination */}
+        {filteredGroups.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="text-center py-12"
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="mt-8 flex justify-center"
           >
-            <Loader2 className="h-12 w-12 animate-spin text-primary-600 mx-auto mb-4" />
-            <p className="text-gray-600 dark:text-gray-300">Memuat grup...</p>
-          </motion.div>
-        )}
-
-        {/* Groups List */}
-        {!loading && !error && (
-          <div className="space-y-6">
-            {groups.length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-                className="text-center py-12"
-              >
-                <div className="w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <Users className="h-12 w-12 text-gray-400" />
-                </div>
-                <h3 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
-                  Tidak Ada Grup Tersedia
-                </h3>
-                <p className="text-gray-600 dark:text-gray-300 mb-8 max-w-md mx-auto">
-                  Belum ada grup yang tersedia untuk aplikasi ini. Coba buat grup baru dan ajak teman-teman bergabung!
-                </p>
-                <Button 
-                  onClick={() => router.push('/groups/create')}
-                  size="lg"
-                  className="px-8"
-                >
-                  <UserPlus className="h-5 w-5 mr-2" />
-                  Buat Grup Baru
+            <Card className="p-4 border-0 shadow-xl">
+              <div className="flex items-center space-x-2">
+                <Button variant="outline" size="sm" disabled>
+                  Previous
                 </Button>
-              </motion.div>
-            ) : (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.6, delay: 0.2 }}
-                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-              >
-                {groups.map((group, index) => (
-                  <motion.div
-                    key={group.id}
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ 
-                      duration: 0.6, 
-                      delay: index * 0.08,
-                      ease: [0.25, 0.46, 0.45, 0.94]
-                    }}
-                    whileHover={{ 
-                      y: -8, 
-                      scale: 1.03,
-                      transition: { duration: 0.3, ease: "easeOut" }
-                    }}
-                    className="group"
-                  >
-                    <Card className="p-6 hover:shadow-xl transition-all duration-300 dark:bg-gray-800 border-0 shadow-lg group-hover:shadow-2xl">
-                      {/* Header */}
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center space-x-3">
-                          <motion.div 
-                            whileHover={{ 
-                              rotate: 8,
-                              scale: 1.1,
-                              transition: { duration: 0.3, ease: "easeOut" }
-                            }}
-                            className="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center shadow-md"
-                          >
-                            {group.app.icon_url ? (
-                              <img 
-                                src={group.app.icon_url} 
-                                alt={group.app.name}
-                                className="w-8 h-8"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none'
-                                  e.currentTarget.nextElementSibling?.classList.remove('hidden')
-                                }}
-                              />
-                            ) : null}
-                            <div className={`w-8 h-8 bg-primary-100 rounded flex items-center justify-center ${group.app.icon_url ? 'hidden' : ''}`}>
-                              <span className="text-primary-600 font-bold text-lg">
-                                {group.app.name.charAt(0)}
-                              </span>
-                            </div>
-                          </motion.div>
-                          <div>
-                            <h3 className="font-semibold text-gray-900 dark:text-white flex items-center">
-                              {group.name}
-                              {group.is_popular && (
-                                <Star className="h-4 w-4 text-yellow-500 ml-2 fill-current" />
-                              )}
-                            </h3>
-                            <Badge variant="gray" className="text-xs">
-                              {group.app.name}
-                            </Badge>
-                          </div>
-                        </div>
-                        <Badge 
-                          variant={group.status === 'open' ? 'success' : 'warning'}
-                          className="text-xs"
-                        >
-                          {group.status === 'open' ? 'Terbuka' : 'Penuh'}
-                        </Badge>
-                      </div>
-
-                      {group.description && (
-                        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
-                          {group.description}
-                        </p>
-                      )}
-
-                      {/* Group Stats */}
-                      <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div className="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                          <Users className="h-5 w-5 text-gray-400 mx-auto mb-1" />
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
-                            {group.current_members}/{group.max_members}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Anggota</p>
-                        </div>
-                        <div className="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                          <CreditCard className="h-5 w-5 text-gray-400 mx-auto mb-1" />
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
-                            {formatCurrency(group.total_price)}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Total Aplikasi</p>
-                        </div>
-                      </div>
-
-                      {/* Price Breakdown */}
-                      <div className="mb-4 p-3 bg-primary-50 dark:bg-primary-900 rounded-lg">
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-600 dark:text-gray-300">Per User:</span>
-                          <span className="font-semibold text-primary-600 dark:text-primary-400">
-                            {formatCurrency(group.price_per_member)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
-                          <span>Admin fee: {formatCurrency(3500)}</span>
-                          <span>Total per user: {formatCurrency(group.price_per_member + 3500)}</span>
-                        </div>
-                      </div>
-
-                      {/* Owner Info */}
-                      <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mb-4">
-                        <span>Dibuat oleh: {group.owner?.full_name || 'Please login to see'}</span>
-                        <div className="flex items-center space-x-1">
-                          <Clock className="h-3 w-3" />
-                          <span>{new Date(group.created_at).toLocaleDateString('id-ID')}</span>
-                        </div>
-                      </div>
-
-                      {/* Join Button */}
-                      <Button
-                        onClick={() => handleJoinGroup(group.invite_code)}
-                        disabled={group.status !== 'open' || joiningGroup === group.invite_code}
-                        loading={joiningGroup === group.invite_code}
-                        className="w-full group-hover:shadow-lg transition-all duration-300"
-                        size="lg"
-                      >
-                        {joiningGroup === group.invite_code ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Bergabung...
-                          </>
-                        ) : !user ? (
-                          <>
-                            <UserPlus className="h-4 w-4 mr-2" />
-                            Daftar untuk Bergabung
-                          </>
-                        ) : (
-                          <>
-                            <UserPlus className="h-4 w-4 mr-2" />
-                            Bergabung dengan Grup
-                          </>
-                        )}
-                      </Button>
-                    </Card>
-                  </motion.div>
-                ))}
-              </motion.div>
-            )}
-          </div>
+                <Button variant="outline" size="sm" className="bg-primary-600 text-white border-primary-600">
+                  1
+                </Button>
+                <Button variant="outline" size="sm">
+                  2
+                </Button>
+                <Button variant="outline" size="sm">
+                  3
+                </Button>
+                <Button variant="outline" size="sm">
+                  Next
+                </Button>
+              </div>
+            </Card>
+          </motion.div>
         )}
       </div>
     </div>

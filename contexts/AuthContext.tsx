@@ -15,6 +15,7 @@ interface User {
   total_spent?: number
   created_at: string
   is_verified?: boolean
+  is_admin?: boolean
 }
 
 interface AuthContextType {

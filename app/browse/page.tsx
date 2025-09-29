@@ -13,7 +13,6 @@ import {
   Star, 
   ExternalLink,
   Users,
-  Plus,
   Eye,
   TrendingUp
 } from 'lucide-react'
@@ -117,9 +116,9 @@ export default function BrowsePage() {
     setPagination(prev => ({ ...prev, page: newPage }))
   }
 
-  const handleCreateGroup = (app: App) => {
-    // Navigate to create group page with app pre-selected
-    router.push(`/groups/create?app=${encodeURIComponent(JSON.stringify(app))}`)
+  const handleViewDetail = (app: App) => {
+    // Navigate to app detail page
+    router.push(`/app/${app.id}`)
   }
 
   const handleJoinGroup = (app: App) => {
@@ -292,12 +291,12 @@ export default function BrowsePage() {
 
                   <div className="flex space-x-2">
                     <Button
-                      onClick={() => handleCreateGroup(app)}
+                      onClick={() => handleViewDetail(app)}
                       className="flex-1"
                       size="sm"
                     >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Buat Grup
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Detail
                     </Button>
                     <Button
                       onClick={() => handleJoinGroup(app)}

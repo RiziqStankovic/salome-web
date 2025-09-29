@@ -127,7 +127,9 @@ export default function JoinGroupPage({ params }: { params: { code: string } }) 
     try {
       await groupAPI.joinGroup(params.code)
       toast.success('Berhasil bergabung ke grup!')
-      router.push(`/groups/${group?.id}`)
+      
+      // Redirect to groups page to see the joined group
+      router.push('/groups')
     } catch (error: any) {
       console.error('Error joining group:', error)
       if (error.response?.status === 404) {
