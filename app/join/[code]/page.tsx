@@ -31,7 +31,7 @@ interface Group {
   price_per_member: number
   admin_fee: number
   total_price: number
-  status: string
+  group_status: string
   invite_code: string
   owner_id: string
   expires_at?: string
@@ -228,10 +228,10 @@ export default function JoinGroupPage({ params }: { params: { code: string } }) 
                           </p>
                         </div>
                         <Badge 
-                          variant={availableGroup.status === 'open' ? 'success' : 'error'}
+                          variant={availableGroup.group_status === 'open' ? 'success' : 'error'}
                           className="text-xs"
                         >
-                          {availableGroup.status === 'open' ? 'Open' : 'Full'}
+                          {availableGroup.group_status === 'open' ? 'Open' : 'Full'}
                         </Badge>
                       </div>
                       
@@ -252,11 +252,11 @@ export default function JoinGroupPage({ params }: { params: { code: string } }) 
 
                       <Button
                         onClick={() => router.push(`/join/${availableGroup.invite_code}`)}
-                        disabled={availableGroup.status !== 'open'}
+                        disabled={availableGroup.group_status !== 'open'}
                         size="sm"
                         className="w-full"
                       >
-                        {availableGroup.status === 'open' ? 'Join Grup' : 'Grup Penuh'}
+                        {availableGroup.group_status === 'open' ? 'Join Grup' : 'Grup Penuh'}
                       </Button>
                     </Card>
                   ))}
@@ -392,9 +392,9 @@ export default function JoinGroupPage({ params }: { params: { code: string } }) 
 
             <div className="flex items-center justify-center space-x-2 mb-4">
               <Badge 
-                variant={group.status === 'open' ? 'success' : group.status === 'full' ? 'error' : 'primary'}
+                variant={group.group_status === 'open' ? 'success' : group.group_status === 'full' ? 'error' : 'primary'}
               >
-                {group.status === 'open' ? 'Terbuka' : group.status === 'full' ? 'Penuh' : 'Aktif'}
+                {group.group_status === 'open' ? 'Terbuka' : group.group_status === 'full' ? 'Penuh' : 'Aktif'}
               </Badge>
               <Badge variant="primary">
                 Kode: {group.invite_code}
@@ -451,11 +451,11 @@ export default function JoinGroupPage({ params }: { params: { code: string } }) 
                   Login untuk Bergabung
                 </Button>
               </div>
-            ) : group.status !== 'open' ? (
+            ) : group.group_status !== 'open' ? (
               <div className="text-center">
                 <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
                 <p className="text-gray-600 dark:text-gray-300 mb-4">
-                  {group.status === 'full' ? 'Maaf, grup ini sudah penuh' : 'Grup ini tidak dapat diakses'}
+                  {group.group_status === 'full' ? 'Maaf, grup ini sudah penuh' : 'Grup ini tidak dapat diakses'}
                 </p>
                 <Button
                   onClick={() => router.push('/groups')}

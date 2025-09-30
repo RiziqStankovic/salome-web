@@ -16,6 +16,7 @@ interface User {
   created_at: string
   is_verified?: boolean
   is_admin?: boolean
+  role?: string
 }
 
 interface AuthContextType {

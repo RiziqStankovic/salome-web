@@ -2,402 +2,342 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import DashboardLayout from '@/components/DashboardLayout'
+import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
-import { Input } from '@/components/ui/Input'
-import { Label } from '@/components/ui/Label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
 import { 
+  Shield, 
+  Mail, 
   Users, 
-  Settings, 
-  Search, 
-  Filter,
-  RefreshCw,
+  BarChart3, 
+  Settings,
+  Eye,
   CheckCircle,
-  XCircle,
   Clock,
-  AlertCircle,
-  Shield
+  XCircle,
+  TrendingUp,
+  Activity
 } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { groupAPI, adminAPI } from '@/lib/api'
+import { useAuth } from '@/contexts/AuthContext'
 
-interface Group {
-  id: string
-  name: string
-  description?: string
-  group_status: string
-  current_members: number
-  max_members: number
-  created_at: string
-  all_paid_at?: string
-  owner: {
-    id: string
-    full_name: string
-  }
-  app: {
-    name: string
-    category: string
-  }
-}
-
-interface GroupMember {
-  id: string
-  user_id: string
-  group_id: string
-  user_status: string
-  joined_at: string
-  paid_at?: string
-  activated_at?: string
-  expired_at?: string
-  removed_at?: string
-  removed_reason?: string
-  user: {
-    id: string
-    full_name: string
-    email: string
-  }
+interface AdminStats {
+  totalUsers: number
+  totalGroups: number
+  totalSubmissions: number
+  pendingSubmissions: number
+  approvedSubmissions: number
+  rejectedSubmissions: number
+  totalRevenue: number
+  monthlyRevenue: number
 }
 
 export default function AdminPage() {
   const router = useRouter()
-  const [groups, setGroups] = useState<Group[]>([])
-  const [members, setMembers] = useState<GroupMember[]>([])
+  const { user, loading: authLoading } = useAuth()
+  const [stats, setStats] = useState<AdminStats>({
+    totalUsers: 0,
+    totalGroups: 0,
+    totalSubmissions: 0,
+    pendingSubmissions: 0,
+    approvedSubmissions: 0,
+    rejectedSubmissions: 0,
+    totalRevenue: 0,
+    monthlyRevenue: 0
+  })
   const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedGroup, setSelectedGroup] = useState<string>('')
-  const [selectedStatus, setSelectedStatus] = useState<string>('')
 
-  // User status constants
-  const userStatuses = [
-    { value: 'pending', label: 'Pending', color: 'yellow' },
-    { value: 'paid', label: 'Paid', color: 'blue' },
-    { value: 'active', label: 'Active', color: 'green' },
-    { value: 'expired', label: 'Expired', color: 'red' },
-    { value: 'removed', label: 'Removed', color: 'gray' }
-  ]
-
-  // Group status constants
-  const groupStatuses = [
-    { value: 'open', label: 'Open', color: 'green' },
-    { value: 'private', label: 'Private', color: 'gray' },
-    { value: 'full', label: 'Full', color: 'yellow' },
-    { value: 'paid_group', label: 'Paid Group', color: 'blue' },
-    { value: 'closed', label: 'Closed', color: 'red' }
-  ]
-
+  // Redirect to homepage if not admin
   useEffect(() => {
-    fetchGroups()
-  }, [])
+    if (!authLoading && (!user || (user.role !== 'admin' && !user.is_admin))) {
+      router.push('/')
+    }
+  }, [user, authLoading, router])
 
-  const fetchGroups = async () => {
+  // Fetch admin stats
+  useEffect(() => {
+    if (user?.is_admin) {
+      fetchAdminStats()
+    }
+  }, [user])
+
+  const fetchAdminStats = async () => {
     try {
       setLoading(true)
-      const response = await groupAPI.getPublicGroups()
-      setGroups(response.data.groups || [])
+      // TODO: Implement API call
+      // const response = await adminAPI.getStats()
+      // setStats(response.data)
+      
+      // Mock data for now
+      setStats({
+        totalUsers: 1250,
+        totalGroups: 89,
+        totalSubmissions: 156,
+        pendingSubmissions: 23,
+        approvedSubmissions: 120,
+        rejectedSubmissions: 13,
+        totalRevenue: 12500000,
+        monthlyRevenue: 2500000
+      })
     } catch (error) {
-      console.error('Error fetching groups:', error)
+      console.error('Error fetching admin stats:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  const fetchGroupMembers = async (groupId: string) => {
-    try {
-      const response = await groupAPI.getGroupMembers(groupId)
-      setMembers(response.data.members || [])
-    } catch (error) {
-      console.error('Error fetching group members:', error)
-    }
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0
+    }).format(amount)
   }
 
-  const updateUserStatus = async (userId: string, groupId: string, newStatus: string, reason?: string) => {
-    try {
-      await adminAPI.updateUserStatus({
-        user_id: userId,
-        group_id: groupId,
-        new_status: newStatus,
-        removed_reason: reason
-      })
-      
-      // Refresh data
-      if (selectedGroup) {
-        fetchGroupMembers(selectedGroup)
-      }
-    } catch (error) {
-      console.error('Error updating user status:', error)
-    }
-  }
-
-  const updateGroupStatus = async (groupId: string, newStatus: string) => {
-    try {
-      await adminAPI.updateGroupStatus({
-        group_id: groupId,
-        new_status: newStatus
-      })
-      
-      // Refresh data
-      fetchGroups()
-    } catch (error) {
-      console.error('Error updating group status:', error)
-    }
-  }
-
-  const getStatusColor = (status: string, type: 'user' | 'group') => {
-    const statuses = type === 'user' ? userStatuses : groupStatuses
-    const statusInfo = statuses.find(s => s.value === status)
-    return statusInfo?.color || 'gray'
-  }
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return <Clock className="h-4 w-4" />
-      case 'paid':
-        return <CheckCircle className="h-4 w-4" />
-      case 'active':
-        return <CheckCircle className="h-4 w-4" />
-      case 'expired':
-        return <XCircle className="h-4 w-4" />
-      case 'removed':
-        return <XCircle className="h-4 w-4" />
-      default:
-        return <AlertCircle className="h-4 w-4" />
-    }
-  }
-
-  const filteredGroups = groups.filter(group =>
-    group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    group.app.name.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
-  const filteredMembers = members.filter(member =>
-    member.user.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    member.user.email.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
-  if (loading) {
+  // Show loading while checking auth
+  if (authLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
         <div className="text-center">
-          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-slate-600 dark:text-slate-400" />
-          <p className="text-slate-600 dark:text-slate-400">Loading admin panel...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-300">Memuat...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show message if not admin
+  if (!user || (user.role !== 'admin' && !user.is_admin)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-300">Mengarahkan ke halaman utama...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      <div className="container mx-auto px-4 py-8">
+    <DashboardLayout>
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center">
-                <Shield className="h-8 w-8 mr-3 text-blue-600" />
-                Admin Panel
-              </h1>
-              <p className="text-slate-600 dark:text-slate-400 mt-2">
-                Manage user and group statuses
-              </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Admin Panel</h1>
+            <p className="text-gray-600 dark:text-gray-300 mt-1">
+              Kelola dan pantau aktivitas platform SALOME
+            </p>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+            <span className="text-sm text-gray-600 dark:text-gray-300">System Online</span>
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Card className="p-6 hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push('/admin/email-submissions')}>
+              <div className="flex items-center">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                  <Mail className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Email Submissions</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.pendingSubmissions}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Pending Review</p>
+                </div>
+              </div>
+            </Card>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+          >
+            <Card className="p-6 hover:shadow-lg transition-shadow cursor-pointer">
+              <div className="flex items-center">
+                <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                  <Users className="h-6 w-6 text-green-600 dark:text-green-400" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Users</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalUsers.toLocaleString()}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Registered</p>
+                </div>
+              </div>
+            </Card>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
+          >
+            <Card className="p-6 hover:shadow-lg transition-shadow cursor-pointer">
+              <div className="flex items-center">
+                <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
+                  <BarChart3 className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Groups</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalGroups}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Active Groups</p>
+                </div>
+              </div>
+            </Card>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.3 }}
+          >
+            <Card className="p-6 hover:shadow-lg transition-shadow cursor-pointer">
+              <div className="flex items-center">
+                <div className="p-2 bg-orange-100 dark:bg-orange-900 rounded-lg">
+                  <TrendingUp className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Monthly Revenue</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(stats.monthlyRevenue)}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">This Month</p>
+                </div>
+              </div>
+            </Card>
+          </motion.div>
+        </div>
+
+        {/* Detailed Stats */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Email Submissions Overview */}
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Email Submissions</h3>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push('/admin/email-submissions')}
+                className="flex items-center space-x-2"
+              >
+                <Eye className="h-4 w-4" />
+                <span>View All</span>
+              </Button>
             </div>
-            <Button onClick={fetchGroups} variant="outline">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Clock className="h-4 w-4 text-yellow-600" />
+                  <span className="text-sm text-gray-600 dark:text-gray-300">Pending</span>
+                </div>
+                <span className="text-lg font-semibold text-gray-900 dark:text-white">{stats.pendingSubmissions}</span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span className="text-sm text-gray-600 dark:text-gray-300">Approved</span>
+                </div>
+                <span className="text-lg font-semibold text-gray-900 dark:text-white">{stats.approvedSubmissions}</span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <XCircle className="h-4 w-4 text-red-600" />
+                  <span className="text-sm text-gray-600 dark:text-gray-300">Rejected</span>
+                </div>
+                <span className="text-lg font-semibold text-gray-900 dark:text-white">{stats.rejectedSubmissions}</span>
+              </div>
+              
+              <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Total</span>
+                  <span className="text-lg font-bold text-gray-900 dark:text-white">{stats.totalSubmissions}</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Revenue Overview */}
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Revenue Overview</h3>
+              <Activity className="h-5 w-5 text-gray-400" />
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600 dark:text-gray-300">Total Revenue</span>
+                <span className="text-lg font-semibold text-gray-900 dark:text-white">{formatCurrency(stats.totalRevenue)}</span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600 dark:text-gray-300">This Month</span>
+                <span className="text-lg font-semibold text-gray-900 dark:text-white">{formatCurrency(stats.monthlyRevenue)}</span>
+              </div>
+              
+              <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">Growth Rate</span>
+                  <span className="text-sm font-medium text-green-600">+12.5%</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Recent Activity */}
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Activity</h3>
+            <Button variant="outline" size="sm">
+              <Settings className="h-4 w-4 mr-2" />
+              Settings
             </Button>
           </div>
-        </div>
-
-        {/* Search */}
-        <div className="mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              placeholder="Search groups or members..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <Tabs defaultValue="groups" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="groups">Groups</TabsTrigger>
-            <TabsTrigger value="members">Members</TabsTrigger>
-          </TabsList>
-
-          {/* Groups Tab */}
-          <TabsContent value="groups" className="space-y-4">
-            <div className="grid gap-4">
-              {filteredGroups.map((group) => (
-                <motion.div
-                  key={group.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <Card className="hover:shadow-lg transition-shadow">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle className="text-lg">{group.name}</CardTitle>
-                          <CardDescription>
-                            {group.app.name} • {group.current_members}/{group.max_members} members
-                          </CardDescription>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Badge variant={getStatusColor(group.group_status, 'group') as any}>
-                            {group.group_status}
-                          </Badge>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setSelectedGroup(group.id)
-                              fetchGroupMembers(group.id)
-                            }}
-                          >
-                            <Users className="h-4 w-4 mr-1" />
-                            View Members
-                          </Button>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label className="text-sm font-medium">Status</Label>
-                          <Select
-                            value={group.group_status}
-                            onValueChange={(value: string) => updateGroupStatus(group.id, value)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {groupStatuses.map((status) => (
-                                <SelectItem key={status.value} value={status.value}>
-                                  {status.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label className="text-sm font-medium">Created</Label>
-                          <p className="text-sm text-slate-600 dark:text-slate-400">
-                            {new Date(group.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                      {group.all_paid_at && (
-                        <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                          <p className="text-sm text-green-800 dark:text-green-200">
-                            <strong>Subscription Active:</strong> Started on {new Date(group.all_paid_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
+          
+          <div className="space-y-3">
+            <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <div className="flex-1">
+                <p className="text-sm text-gray-900 dark:text-white">New user registration: john.doe@email.com</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">2 minutes ago</p>
+              </div>
             </div>
-          </TabsContent>
-
-          {/* Members Tab */}
-          <TabsContent value="members" className="space-y-4">
-            {selectedGroup ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Group Members</h3>
-                  <Button
-                    variant="outline"
-                    onClick={() => fetchGroupMembers(selectedGroup)}
-                  >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Refresh
-                  </Button>
-                </div>
-                
-                <div className="grid gap-4">
-                  {filteredMembers.map((member) => (
-                    <motion.div
-                      key={member.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <Card className="hover:shadow-lg transition-shadow">
-                        <CardContent className="pt-6">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-4">
-                              <div className="w-10 h-10 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center">
-                                <Users className="h-5 w-5 text-slate-600 dark:text-slate-300" />
-                              </div>
-                              <div>
-                                <h4 className="font-medium">{member.user.full_name}</h4>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
-                                  {member.user.email}
-                                </p>
-                                <p className="text-xs text-slate-500 dark:text-slate-500">
-                                  Joined: {new Date(member.joined_at).toLocaleDateString()}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-4">
-                              <div className="text-right">
-                                <Badge variant={getStatusColor(member.user_status, 'user') as any}>
-                                  {getStatusIcon(member.user_status)}
-                                  <span className="ml-1">{member.user_status}</span>
-                                </Badge>
-                                {member.removed_reason && (
-                                  <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
-                                    Reason: {member.removed_reason}
-                                  </p>
-                                )}
-                              </div>
-                              <Select
-                                value={member.user_status}
-                                onValueChange={(value: string) => updateUserStatus(member.user_id, member.group_id, value)}
-                              >
-                                <SelectTrigger className="w-32">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {userStatuses.map((status) => (
-                                    <SelectItem key={status.value} value={status.value}>
-                                      {status.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  ))}
-                </div>
+            
+            <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              <div className="flex-1">
+                <p className="text-sm text-gray-900 dark:text-white">Email submission approved: netflix-account@email.com</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">15 minutes ago</p>
               </div>
-            ) : (
-              <div className="text-center py-12">
-                <Users className="h-12 w-12 mx-auto text-slate-400 mb-4" />
-                <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">
-                  Select a Group
-                </h3>
-                <p className="text-slate-600 dark:text-slate-400">
-                  Choose a group from the Groups tab to view and manage its members
-                </p>
+            </div>
+            
+            <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+              <div className="flex-1">
+                <p className="text-sm text-gray-900 dark:text-white">New group created: Spotify Family Group</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">1 hour ago</p>
               </div>
-            )}
-          </TabsContent>
-        </Tabs>
+            </div>
+            
+            <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+              <div className="flex-1">
+                <p className="text-sm text-gray-900 dark:text-white">Email submission rejected: invalid-email@test.com</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">2 hours ago</p>
+              </div>
+            </div>
+          </div>
+        </Card>
       </div>
-    </div>
+    </DashboardLayout>
   )
 }

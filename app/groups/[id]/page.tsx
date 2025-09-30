@@ -22,9 +22,12 @@ import {
   Calendar,
   MoreVertical,
   Trash2,
-  Edit
+  Edit,
+  UserCheck,
+  AlertTriangle,
+  XCircle
 } from 'lucide-react'
-import { groupAPI, messageAPI, paymentAPI } from '@/lib/api'
+import { groupAPI, messageAPI, paymentAPI, accountCredentialsAPI, emailSubmissionsAPI } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import { motion } from 'framer-motion'
@@ -49,7 +52,6 @@ interface GroupMember {
   id: string
   group_id: string
   user_id: string
-  status: string
   user_status: string
   payment_amount: number
   price_per_member: number
@@ -57,7 +59,23 @@ interface GroupMember {
   user: {
     id: string
     full_name: string
+    email: string
     avatar_url?: string
+  }
+}
+
+interface AccountCredentials {
+  id: string
+  user_id: string
+  app_id: string
+  username?: string
+  email?: string
+  created_at: string
+  updated_at: string
+  app?: {
+    name: string
+    icon_url?: string
+    description?: string
   }
 }
 
@@ -72,7 +90,7 @@ interface Group {
   price_per_member: number
   admin_fee: number
   total_price: number
-  status: string
+  group_status: string
   invite_code: string
   owner_id: string
   expires_at?: string
@@ -113,6 +131,18 @@ export default function GroupDetailPage() {
   const [copied, setCopied] = useState(false)
   const [members, setMembers] = useState<GroupMember[]>([])
   const [processingPayment, setProcessingPayment] = useState(false)
+  const [accountCredentials, setAccountCredentials] = useState<AccountCredentials | null>(null)
+  const [loadingCredentials, setLoadingCredentials] = useState(false)
+  const [selectedEmail, setSelectedEmail] = useState<string>('')
+  const [showEmailSelector, setShowEmailSelector] = useState(false)
+  const [allAccountCredentials, setAllAccountCredentials] = useState<AccountCredentials[]>([])
+  const [submittingEmail, setSubmittingEmail] = useState(false)
+  const [emailSubmissionStatus, setEmailSubmissionStatus] = useState<string | null>(null)
+  const [showTransferModal, setShowTransferModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [selectedNewOwner, setSelectedNewOwner] = useState<string>('')
+  const [transferring, setTransferring] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -125,6 +155,14 @@ export default function GroupDetailPage() {
     }
   }, [groupId])
 
+  // Fetch account credentials when group data is loaded
+  useEffect(() => {
+    if (group?.app?.id && user) {
+      fetchAccountCredentials()
+      fetchAllAccountCredentials()
+    }
+  }, [group?.app?.id, user])
+
   useEffect(() => {
     scrollToBottom()
   }, [messages])
@@ -135,6 +173,23 @@ export default function GroupDetailPage() {
       scrollToBottom()
     }
   }, [])
+
+  // Close email selector when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showEmailSelector) {
+        const target = event.target as HTMLElement
+        if (!target.closest('.email-selector')) {
+          setShowEmailSelector(false)
+        }
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showEmailSelector])
 
   const scrollToBottom = () => {
     if (messagesContainerRef.current) {
@@ -175,6 +230,37 @@ export default function GroupDetailPage() {
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchAccountCredentials = async () => {
+    if (!group?.app?.id) return
+    
+    try {
+      setLoadingCredentials(true)
+      const response = await accountCredentialsAPI.getAccountCredentialsByApp(group.app.id)
+      setAccountCredentials(response.data.data)
+      // Set selected email to the found credentials
+      if (response.data.data?.email) {
+        setSelectedEmail(response.data.data.email)
+      }
+    } catch (error: any) {
+      console.error('Error fetching account credentials:', error)
+      // If no credentials found, set to null (will use user data as fallback)
+      setAccountCredentials(null)
+      setSelectedEmail('')
+    } finally {
+      setLoadingCredentials(false)
+    }
+  }
+
+  const fetchAllAccountCredentials = async () => {
+    try {
+      const response = await accountCredentialsAPI.getUserAccountCredentials()
+      setAllAccountCredentials(response.data.data || [])
+    } catch (error: any) {
+      console.error('Error fetching all account credentials:', error)
+      setAllAccountCredentials([])
     }
   }
 
@@ -286,6 +372,82 @@ export default function GroupDetailPage() {
     }
   }
 
+  const copyEmail = async () => {
+    const email = getCurrentEmail()
+    if (email) {
+      try {
+        await navigator.clipboard.writeText(email)
+        toast.success('Email Anda disalin!')
+      } catch (error) {
+        console.error('Failed to copy email:', error)
+        toast.error('Gagal menyalin email')
+      }
+    }
+  }
+
+  const copyFullName = async () => {
+    const fullName = getCurrentName()
+    if (fullName) {
+      try {
+        await navigator.clipboard.writeText(fullName)
+        toast.success('Nama lengkap Anda disalin!')
+      } catch (error) {
+        console.error('Failed to copy full name:', error)
+        toast.error('Gagal menyalin nama lengkap')
+      }
+    }
+  }
+
+  const handleEmailSelection = (email: string) => {
+    setSelectedEmail(email)
+    setShowEmailSelector(false)
+    
+    // Find the corresponding account credentials
+    const selectedCred = allAccountCredentials.find(cred => cred.email === email)
+    if (selectedCred) {
+      setAccountCredentials(selectedCred)
+    } else if (email === user?.email) {
+      setAccountCredentials(null) // Use user data
+    }
+  }
+
+  const getCurrentEmail = () => {
+    if (selectedEmail) return selectedEmail
+    return accountCredentials?.email || user?.email || ''
+  }
+
+  const getCurrentName = () => {
+    if (accountCredentials?.username) return accountCredentials.username
+    return user?.full_name || ''
+  }
+
+  const submitEmailForGroup = async () => {
+    if (!group || !user) return
+
+    try {
+      setSubmittingEmail(true)
+      await emailSubmissionsAPI.createEmailSubmission({
+        group_id: group.id,
+        app_id: group.app.id,
+        email: getCurrentEmail(),
+        username: getCurrentName(),
+        full_name: user.full_name
+      })
+      
+      setEmailSubmissionStatus('submitted')
+      toast.success('Email berhasil diajukan untuk grup patungan!')
+    } catch (error: any) {
+      console.error('Error submitting email:', error)
+      if (error.response?.data?.message) {
+        toast.error(error.response.data.message)
+      } else {
+        toast.error('Gagal mengajukan email')
+      }
+    } finally {
+      setSubmittingEmail(false)
+    }
+  }
+
   const handlePayment = async () => {
     if (!group || !user) return
 
@@ -309,6 +471,50 @@ export default function GroupDetailPage() {
       toast.error(error.response?.data?.error || 'Gagal membuat link pembayaran')
     } finally {
       setProcessingPayment(false)
+    }
+  }
+
+  const handleTransferOwnership = async () => {
+    if (!selectedNewOwner || !group) return
+
+    setTransferring(true)
+    try {
+      await groupAPI.transferOwnership(group.id, {
+        new_owner_id: selectedNewOwner
+      })
+      
+      toast.success('Kepemilikan grup berhasil ditransfer!')
+      setShowTransferModal(false)
+      setSelectedNewOwner('')
+      
+      // Refresh group data
+      fetchGroupDetails()
+      fetchMembers()
+    } catch (error: any) {
+      console.error('Error transferring ownership:', error)
+      toast.error(error.response?.data?.error || 'Gagal transfer kepemilikan')
+    } finally {
+      setTransferring(false)
+    }
+  }
+
+  const handleDeleteGroup = async () => {
+    if (!group) return
+
+    setDeleting(true)
+    try {
+      await groupAPI.deleteGroup(group.id)
+      
+      toast.success('Grup berhasil dihapus!')
+      setShowDeleteModal(false)
+      
+      // Redirect to groups page
+      router.push('/groups')
+    } catch (error: any) {
+      console.error('Error deleting group:', error)
+      toast.error(error.response?.data?.error || 'Gagal menghapus grup')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -383,13 +589,13 @@ export default function GroupDetailPage() {
                   <Badge 
                     variant={
                       isExpired ? 'error' : 
-                      group.status === 'open' ? 'success' : 
-                      group.status === 'full' || isGroupFull ? 'warning' : 'primary'
+                      group.group_status === 'open' ? 'success' : 
+                      group.group_status === 'full' || isGroupFull ? 'warning' : 'primary'
                     }
                   >
                     {isExpired ? 'Kedaluwarsa' : 
-                     group.status === 'open' ? 'Terbuka' : 
-                     group.status === 'full' || isGroupFull ? 'Penuh' : 'Aktif'}
+                     group.group_status === 'open' ? 'Terbuka' : 
+                     group.group_status === 'full' || isGroupFull ? 'Penuh' : 'Aktif'}
                   </Badge>
                   <span className="text-sm text-gray-500 dark:text-gray-400">
                     {group.current_members} / {group.max_members} anggota
@@ -549,8 +755,283 @@ export default function GroupDetailPage() {
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 0.6 }}
-                className="space-y-4"
+                className="space-y-6"
               >
+                {/* Informasi User untuk Grup Patungan */}
+                <Card className="p-6 dark:bg-gray-800">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                    <Users className="h-5 w-5 mr-2 text-primary-600" />
+                    Informasi Akun Anda untuk Grup Patungan
+                  </h3>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0">
+                        <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+                          <Settings className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
+                          Akun Anda yang akan didaftarkan
+                        </h4>
+                        <p className="text-xs text-blue-700 dark:text-blue-300">
+                          Email dan nama Anda ini akan digunakan untuk bergabung ke grup patungan {group?.app?.name}. Pastikan Anda sudah memiliki akun {group?.app?.name}.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Email Anda untuk Grup Patungan
+                      </label>
+                      <div className="flex items-center space-x-2">
+                        <div className="flex-1 relative">
+                          <Input
+                            value={getCurrentEmail()}
+                            disabled
+                            className="bg-gray-50 dark:bg-gray-700 font-mono text-sm pr-10"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowEmailSelector(!showEmailSelector)}
+                            className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
+                          >
+                            <Settings className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={copyEmail}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      
+                      {/* Email Selector Dropdown */}
+                      {showEmailSelector && (
+                        <div className="email-selector mt-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-lg z-10">
+                          <div className="p-2">
+                            <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+                              Pilih email yang akan digunakan:
+                            </div>
+                            
+                            {/* User Profile Email */}
+                            <div
+                              onClick={() => handleEmailSelection(user?.email || '')}
+                              className={`p-2 rounded cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                                selectedEmail === user?.email ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800' : ''
+                              }`}
+                            >
+                              <div className="flex items-center space-x-2">
+                                <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                                <div>
+                                  <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                    {user?.email}
+                                  </div>
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                                    Profil Anda
+                                  </div>
+                                </div>
+                                {selectedEmail === user?.email && (
+                                  <CheckCircle className="h-4 w-4 text-blue-600 ml-auto" />
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Account Credentials Emails */}
+                            {allAccountCredentials
+                              .filter(cred => cred.email && cred.email !== user?.email)
+                              .map((cred) => (
+                                <div
+                                  key={cred.id}
+                                  onClick={() => handleEmailSelection(cred.email!)}
+                                  className={`p-2 rounded cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                                    selectedEmail === cred.email ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800' : ''
+                                  }`}
+                                >
+                                  <div className="flex items-center space-x-2">
+                                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                    <div>
+                                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                        {cred.email}
+                                      </div>
+                                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                                        {cred.app?.name || 'Account Aplikasi'}
+                                      </div>
+                                    </div>
+                                    {selectedEmail === cred.email && (
+                                      <CheckCircle className="h-4 w-4 text-blue-600 ml-auto" />
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+
+                            {/* Add New Email Option */}
+                            <div className="border-t border-gray-200 dark:border-gray-600 mt-2 pt-2">
+                              <button
+                                onClick={() => {
+                                  setShowEmailSelector(false)
+                                  router.push('/settings?tab=account-apps')
+                                }}
+                                className="w-full p-2 rounded cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 text-left"
+                              >
+                                <div className="flex items-center space-x-2">
+                                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                  <div>
+                                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                      + Tambah Email Baru
+                                    </div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                                      Kelola Account Aplikasi
+                                    </div>
+                                  </div>
+                                </div>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Email Anda yang akan didaftarkan ke grup {group?.app?.name}
+                        {accountCredentials?.email && (
+                          <span className="text-blue-600 dark:text-blue-400 ml-1">
+                            (dari Account Aplikasi)
+                          </span>
+                        )}
+                        {!accountCredentials?.email && selectedEmail === user?.email && (
+                          <span className="text-orange-600 dark:text-orange-400 ml-1">
+                            (dari profil Anda)
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Nama Lengkap Anda
+                      </label>
+                      <div className="flex items-center space-x-2">
+                        <Input
+                          value={getCurrentName()}
+                          disabled
+                          className="bg-gray-50 dark:bg-gray-700"
+                        />
+                        <Button variant="outline" size="sm" onClick={copyFullName}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Nama Anda yang akan ditampilkan di grup {group?.app?.name}
+                        {accountCredentials?.username && (
+                          <span className="text-blue-600 dark:text-blue-400 ml-1">
+                            (dari Account Aplikasi)
+                          </span>
+                        )}
+                        {!accountCredentials?.username && (
+                          <span className="text-orange-600 dark:text-orange-400 ml-1">
+                            (dari profil Anda)
+                          </span>
+                        )}
+                      </p>
+                    </div>
+
+                    {/* Account Verification Status */}
+                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                      <div className="flex items-start space-x-3">
+                        <div className="flex-shrink-0">
+                          <div className="w-8 h-8 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+                            <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="text-sm font-medium text-green-900 dark:text-green-100 mb-1">
+                            Status Akun Anda
+                          </h4>
+                          <p className="text-xs text-green-700 dark:text-green-300 mb-2">
+                            Pastikan Anda sudah memiliki akun {group?.app?.name} dan terdaftar jika belum silahkan daftar terlebih dahulu.
+                          </p>
+                          <div className="flex items-center space-x-4 text-xs">
+                            <div className="flex items-center space-x-1">
+                              <CheckCircle className="h-3 w-3 text-green-600" />
+                              <span className="text-green-700 dark:text-green-300">
+                                Email: {getCurrentEmail()}
+                                {accountCredentials?.email && (
+                                  <span className="text-blue-600 dark:text-blue-400 ml-1">(Account App)</span>
+                                )}
+                                {!accountCredentials?.email && selectedEmail === user?.email && (
+                                  <span className="text-orange-600 dark:text-orange-400 ml-1">(Profil)</span>
+                                )}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              <CheckCircle className="h-3 w-3 text-green-600" />
+                              <span className="text-green-700 dark:text-green-300">
+                                Nama: {getCurrentName()}
+                                {accountCredentials?.username && (
+                                  <span className="text-blue-600 dark:text-blue-400 ml-1">(Account App)</span>
+                                )}
+                                {!accountCredentials?.username && (
+                                  <span className="text-orange-600 dark:text-orange-400 ml-1">(Profil)</span>
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                      <div className="flex items-start space-x-2">
+                        <div className="flex-shrink-0">
+                          <div className="w-5 h-5 bg-yellow-100 dark:bg-yellow-900 rounded-full flex items-center justify-center">
+                            <span className="text-xs font-bold text-yellow-600 dark:text-yellow-400">!</span>
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xs text-yellow-800 dark:text-yellow-200 font-medium mb-1">
+                            Penting untuk Grup Patungan
+                          </p>
+                          <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-2">
+                            Pastikan Anda sudah memiliki akun {group?.app?.name} dengan email dan nama yang sama seperti yang ditampilkan di atas.
+                            {accountCredentials ? ' Data ini berasal dari Account Aplikasi Anda.' : ' Data ini berasal dari profil Anda.'}
+                          </p>
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => router.push('/settings?tab=account-apps')}
+                              className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
+                            >
+                              Kelola Account Aplikasi →
+                            </button>
+                            {emailSubmissionStatus !== 'submitted' && (
+                              <Button
+                                size="sm"
+                                onClick={submitEmailForGroup}
+                                disabled={submittingEmail}
+                                className="text-xs px-2 py-1 h-6"
+                              >
+                                {submittingEmail ? 'Mengajukan...' : 'Ajukan Email'}
+                              </Button>
+                            )}
+                          </div>
+                          {emailSubmissionStatus === 'submitted' && (
+                            <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded text-xs text-green-700 dark:text-green-300">
+                              ✅ Email berhasil diajukan! Admin akan meninjau pengajuan Anda.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Daftar Anggota */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                    Daftar Anggota ({members.length}/{group?.max_members})
+                  </h3>
+                  
                 {loadingMembers ? (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -588,7 +1069,7 @@ export default function GroupDetailPage() {
                         <div className="flex items-center space-x-2">
                           <div className="text-right">
                             <p className="text-sm font-medium text-gray-900 dark:text-white">
-                              {formatCurrency(member.price_per_member)}
+                              {formatCurrency(member.price_per_member + 3500)}
                             </p>
                             <Badge 
                               variant={member.user_status === 'paid' ? 'success' : 'warning'}
@@ -606,6 +1087,7 @@ export default function GroupDetailPage() {
                     </Card>
                   ))
                 )}
+                </div>
               </motion.div>
             )}
 
@@ -618,6 +1100,90 @@ export default function GroupDetailPage() {
                 transition={{ duration: 0.6 }}
                 className="space-y-6"
               >
+                {/* Informasi User untuk Grup Patungan */}
+                {/* <Card className="p-6 dark:bg-gray-800">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                    <Settings className="h-5 w-5 mr-2 text-primary-600" />
+                    Informasi User untuk Grup Patungan
+                  </h3>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0">
+                        <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+                          <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
+                          Email yang akan didaftarkan
+                        </h4>
+                        <p className="text-xs text-blue-700 dark:text-blue-300">
+                          Email dan nama ini akan digunakan untuk mendaftarkan akun grup patungan ke aplikasi {group?.app?.name}.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Email untuk Pendaftaran
+                      </label>
+                      <div className="flex items-center space-x-2">
+                        <Input
+                          value={group?.owner?.email || user?.email || ''}
+                          disabled
+                          className="bg-gray-50 dark:bg-gray-700 font-mono text-sm"
+                        />
+                        <Button variant="outline" size="sm" onClick={copyEmail}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Email ini akan digunakan untuk membuat akun {group?.app?.name}
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Nama Lengkap
+                      </label>
+                      <div className="flex items-center space-x-2">
+                        <Input
+                          value={group?.owner?.full_name || user?.full_name || ''}
+                          disabled
+                          className="bg-gray-50 dark:bg-gray-700"
+                        />
+                        <Button variant="outline" size="sm" onClick={copyFullName}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Nama yang akan ditampilkan di akun {group?.app?.name}
+                      </p>
+                    </div>
+
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                      <div className="flex items-start space-x-2">
+                        <div className="flex-shrink-0">
+                          <div className="w-5 h-5 bg-yellow-100 dark:bg-yellow-900 rounded-full flex items-center justify-center">
+                            <span className="text-xs font-bold text-yellow-600 dark:text-yellow-400">!</span>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-xs text-yellow-800 dark:text-yellow-200 font-medium mb-1">
+                            Penting untuk Grup Patungan
+                          </p>
+                          <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                            Pastikan email dan nama di atas valid dan dapat diakses. Informasi ini akan digunakan untuk mendaftarkan akun grup ke {group?.app?.name}.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Card> */}
+
+                {/* Pengaturan Grup */}
                 <Card className="p-6 dark:bg-gray-800">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                     Pengaturan Grup
@@ -644,15 +1210,45 @@ export default function GroupDetailPage() {
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
                       />
                     </div>
+                    <div className="space-y-4">
                     <div className="flex space-x-2">
                       <Button variant="outline" className="flex-1">
                         <Edit className="h-4 w-4 mr-2" />
                         Edit Grup
                       </Button>
-                      <Button variant="outline" className="flex-1 text-red-600 hover:text-red-700">
+                        <Button 
+                          variant="outline" 
+                          className="flex-1 text-orange-600 hover:text-orange-700"
+                          onClick={() => setShowTransferModal(true)}
+                        >
+                          <UserCheck className="h-4 w-4 mr-2" />
+                          Transfer Kepemilikan
+                        </Button>
+                      </div>
+                      <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                          <div className="flex items-start space-x-3">
+                            <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5" />
+                            <div className="flex-1">
+                              <h4 className="text-sm font-medium text-red-900 dark:text-red-100 mb-1">
+                                Zona Bahaya
+                              </h4>
+                              <p className="text-xs text-red-700 dark:text-red-300 mb-3">
+                                Menghapus grup akan menghentikan semua aktivitas dan mengeluarkan semua anggota. 
+                                Tindakan ini tidak dapat dibatalkan.
+                              </p>
+                              <Button 
+                                variant="outline" 
+                                className="w-full text-red-600 hover:text-red-700 border-red-300 hover:border-red-400"
+                                onClick={() => setShowDeleteModal(true)}
+                              >
                         <Trash2 className="h-4 w-4 mr-2" />
                         Hapus Grup
                       </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </Card>
@@ -709,13 +1305,13 @@ export default function GroupDetailPage() {
                   <Badge 
                     variant={
                       isExpired ? 'error' : 
-                      group?.status === 'open' ? 'success' : 
-                      group?.status === 'full' || isGroupFull ? 'warning' : 'primary'
+                      group?.group_status === 'open' ? 'success' : 
+                      group?.group_status === 'full' || isGroupFull ? 'warning' : 'primary'
                     }
                   >
                     {isExpired ? 'Kedaluwarsa' : 
-                     group?.status === 'open' ? 'Terbuka' : 
-                     group?.status === 'full' || isGroupFull ? 'Penuh' : 'Aktif'}
+                     group?.group_status === 'open' ? 'Terbuka' : 
+                     group?.group_status === 'full' || isGroupFull ? 'Penuh' : 'Aktif'}
                   </Badge>
                 </div>
 
@@ -796,7 +1392,7 @@ export default function GroupDetailPage() {
                 Aksi
               </h3>
               <div className="space-y-3">
-                {!isMember && group.status === 'open' && (
+                {!isMember && group.group_status === 'open' && (
                   <Button className="w-full text-sm sm:text-base">
                     <UserPlus className="h-4 w-4 mr-2" />
                     Gabung Grup
@@ -912,6 +1508,153 @@ export default function GroupDetailPage() {
                     Salin Link Saja
                   </Button>
                 </div>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Transfer Ownership Modal */}
+        {showTransferModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <Card className="p-6 max-w-md w-full mx-4 dark:bg-gray-800">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Transfer Kepemilikan Grup
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowTransferModal(false)}
+                >
+                  <XCircle className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                  <div className="flex items-start space-x-2">
+                    <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+                    <div>
+                      <p className="text-xs text-yellow-800 dark:text-yellow-200 font-medium mb-1">
+                        Peringatan
+                      </p>
+                      <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                        Setelah transfer kepemilikan, Anda akan menjadi admin dan tidak dapat mengembalikan status owner.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Pilih Member Baru sebagai Owner
+                  </label>
+                  <select
+                    value={selectedNewOwner}
+                    onChange={(e) => setSelectedNewOwner(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  >
+                    <option value="">Pilih member...</option>
+                    {members
+                      .filter(member => member.user_id !== user?.id && member.user_status === 'active')
+                      .map(member => (
+                        <option key={member.id} value={member.user_id}>
+                          {member.user?.full_name} ({member.user?.email})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-2 mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowTransferModal(false)}
+                  disabled={transferring}
+                >
+                  Batal
+                </Button>
+                <Button
+                  onClick={handleTransferOwnership}
+                  disabled={!selectedNewOwner || transferring}
+                  className="bg-orange-600 hover:bg-orange-700"
+                >
+                  {transferring ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  ) : (
+                    <UserCheck className="h-4 w-4 mr-2" />
+                  )}
+                  {transferring ? 'Transfer...' : 'Transfer Kepemilikan'}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Delete Group Modal */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <Card className="p-6 max-w-md w-full mx-4 dark:bg-gray-800">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Hapus Grup
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowDeleteModal(false)}
+                >
+                  <XCircle className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                  <div className="flex items-start space-x-3">
+                    <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5" />
+                    <div>
+                      <h4 className="text-sm font-medium text-red-900 dark:text-red-100 mb-2">
+                        Apakah Anda yakin ingin menghapus grup ini?
+                      </h4>
+                      <ul className="text-xs text-red-700 dark:text-red-300 space-y-1">
+                        <li>• Semua anggota akan dikeluarkan dari grup</li>
+                        <li>• Semua pesan dan data grup akan dihapus</li>
+                        <li>• Tindakan ini tidak dapat dibatalkan</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    <strong>Nama Grup:</strong> {group?.name}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    <strong>Jumlah Member:</strong> {group?.current_members || 0} orang
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-2 mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDeleteModal(false)}
+                  disabled={deleting}
+                >
+                  Batal
+                </Button>
+                <Button
+                  onClick={handleDeleteGroup}
+                  disabled={deleting}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {deleting ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-2" />
+                  )}
+                  {deleting ? 'Menghapus...' : 'Ya, Hapus Grup'}
+                </Button>
               </div>
             </Card>
           </div>

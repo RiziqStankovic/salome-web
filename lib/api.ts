@@ -96,6 +96,11 @@ export const groupAPI = {
   
   getGroupMembers: (groupId: string) => 
     api.get(`/groups/${groupId}/members`),
+  
+  transferOwnership: (groupId: string, data: {
+    new_owner_id: string
+  }) => 
+    api.put(`/groups/${groupId}/transfer-ownership`, data),
 }
 
 export const subscriptionAPI = {
@@ -220,19 +225,188 @@ export const transactionAPI = {
     api.post('/transactions/top-up', data),
 }
 
+// Account Credentials API endpoints
+export const accountCredentialsAPI = {
+  getUserAccountCredentials: () => 
+    api.get('/account-credentials'),
+  
+  createOrUpdateAccountCredentials: (data: {
+    app_id: string
+    username?: string
+    email?: string
+  }) => 
+    api.post('/account-credentials', data),
+  
+  getAccountCredentialsByApp: (appId: string) => 
+    api.get(`/account-credentials/app/${appId}`),
+}
+
+// Email Submissions API endpoints
+export const emailSubmissionsAPI = {
+  createEmailSubmission: (data: {
+    group_id: string
+    app_id: string
+    email: string
+    username?: string
+    full_name: string
+  }) => 
+    api.post('/email-submissions', data),
+  
+  getEmailSubmission: (id: string) => 
+    api.get(`/email-submissions/${id}`),
+}
+
 // Admin API endpoints
 export const adminAPI = {
+  // Email submissions
+  getEmailSubmissions: (params?: {
+    page?: number
+    page_size?: number
+    status?: string
+    search?: string
+  }) => 
+    api.get('/admin/email-submissions', { params }),
+  
+  updateEmailSubmissionStatus: (id: string, data: {
+    status: 'approved' | 'rejected'
+    notes?: string
+  }) => 
+    api.put(`/admin/email-submissions/${id}/status`, data),
+  
+  // Users management
+  getUsers: (params?: {
+    page?: number
+    page_size?: number
+    status?: string
+    search?: string
+  }) => 
+    api.get('/admin/users', { params }),
+  
   updateUserStatus: (data: {
     user_id: string
-    group_id: string
     new_status: string
     removed_reason?: string
   }) => 
     api.put('/admin/users/status', data),
   
+  // Groups management
+  getGroups: (params?: {
+    page?: number
+    page_size?: number
+    status?: string
+    search?: string
+  }) => 
+    api.get('/admin/groups', { params }),
+  
   updateGroupStatus: (data: {
     group_id: string
     new_status: string
+    removed_reason?: string
   }) => 
     api.put('/admin/groups/status', data),
+  
+  // CRUD operations for groups
+  createGroup: (data: {
+    name: string
+    description?: string
+    app_id: string
+    max_members: number
+    is_public?: boolean
+    owner_id: string
+  }) => 
+    api.post('/admin/groups', data),
+  
+  updateGroup: (data: {
+    group_id: string
+    name: string
+    description?: string
+    app_id: string
+    max_members: number
+    is_public?: boolean
+    status?: string
+    group_status?: string
+  }) => 
+    api.put('/admin/groups', data),
+  
+  deleteGroup: (data: {
+    group_id: string
+  }) => 
+    api.delete('/admin/groups', { data }),
+  
+  // Helper APIs for dropdowns
+  getUsersForDropdown: () => 
+    api.get('/admin/users?page=1&page_size=1000'),
+  
+  getAppsForDropdown: () => 
+    api.get('/admin/apps?page=1&page_size=1000'),
+  
+  // Group members management
+  getGroupMembers: (groupId: string) => 
+    api.get(`/admin/groups/${groupId}/members`),
+  
+  changeGroupOwner: (data: {
+    group_id: string
+    new_owner_id: string
+  }) => 
+    api.put('/admin/groups/change-owner', data),
+  
+  // Member management
+  removeGroupMember: (data: {
+    group_id: string
+    user_id: string
+    reason?: string
+  }) => 
+    api.delete('/admin/groups/members', { data }),
+  
+  addGroupMember: (data: {
+    group_id: string
+    user_id: string
+    role?: string
+  }) => 
+    api.post('/admin/groups/members', data),
+  
+  // Apps management
+  getApps: (params?: {
+    page?: number
+    page_size?: number
+    status?: string
+    search?: string
+  }) => 
+    api.get('/admin/apps', { params }),
+  
+  updateAppStatus: (data: {
+    app_id: string
+    field: 'is_active' | 'is_available'
+    value: boolean
+  }) => 
+    api.put('/admin/apps/status', data),
+  
+  // CRUD operations for apps
+  createApp: (data: {
+    name: string
+    description: string
+    category: string
+    icon_url?: string
+    how_it_works?: string
+    is_active?: boolean
+    is_available?: boolean
+  }) => 
+    api.post('/admin/apps', data),
+  
+  updateApp: (data: {
+    app_id: string
+    name: string
+    description: string
+    category: string
+    icon_url?: string
+    how_it_works?: string
+    is_active?: boolean
+    is_available?: boolean
+  }) => 
+    api.put('/admin/apps', data),
+  
+  deleteApp: (data: {
+    app_id: string
+  }) => 
+    api.delete('/admin/apps', { data }),
 }

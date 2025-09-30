@@ -7,6 +7,7 @@ import DashboardLayout from '@/components/DashboardLayout'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import AppIcon from '@/components/AppIcon'
 import { ArrowLeft, Users, Info, Zap, Shield, CreditCard, Search, Star } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { groupAPI, appAPI } from '@/lib/api'
@@ -18,6 +19,7 @@ interface CreateGroupForm {
   description: string
   app_id: string
   max_members: number
+  is_public: string
 }
 
 interface App {
@@ -48,7 +50,8 @@ export default function CreateGroupPage() {
 
   const { register, handleSubmit, formState: { errors }, watch, setValue } = useForm<CreateGroupForm>({
     defaultValues: {
-      max_members: 4
+      max_members: 4,
+      is_public: 'true'
     }
   })
 
@@ -105,7 +108,13 @@ export default function CreateGroupPage() {
   const onSubmit = async (data: CreateGroupForm) => {
     setLoading(true)
     try {
-      const response = await groupAPI.createGroup(data)
+      // Convert string values to boolean for is_public
+      const formData = {
+        ...data,
+        is_public: data.is_public === 'true'
+      }
+      
+      const response = await groupAPI.createGroup(formData)
       toast.success('Grup berhasil dibuat!')
       showConfetti()
       setTimeout(() => {
@@ -216,19 +225,11 @@ export default function CreateGroupPage() {
                               onClick={() => setValue('app_id', app.id)}
                             >
                               <div className="flex items-center space-x-3">
-                                <div className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
-                                  {app.icon_url ? (
-                                    <img 
-                                      src={app.icon_url} 
-                                      alt={app.name}
-                                      className="w-6 h-6"
-                                    />
-                                  ) : (
-                                    <span className="text-primary-600 font-bold text-xs">
-                                      {app.name.charAt(0)}
-                                    </span>
-                                  )}
-                                </div>
+                                <AppIcon 
+                                  iconUrl={app.icon_url}
+                                  name={app.name}
+                                  size="md"
+                                />
                                 <div className="flex-1">
                                   <div className="flex items-center space-x-2">
                                     <h4 className="font-medium text-gray-900 dark:text-white">
@@ -310,6 +311,72 @@ export default function CreateGroupPage() {
                   />
                 </div>
 
+                {/* Visibility Settings */}
+                <div>
+                  <label className="label mb-3 block">Visibilitas Grup</label>
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="radio"
+                        id="public"
+                        value="true"
+                        {...register('is_public')}
+                        className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 focus:ring-primary-500"
+                      />
+                      <label htmlFor="public" className="flex-1 cursor-pointer">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium text-gray-900 dark:text-white">Public</span>
+                              <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">Direkomendasikan</span>
+                            </div>
+                            <p className="text-sm text-gray-600 dark:text-gray-300">
+                              Grup akan muncul di halaman "Join Group" dan dapat ditemukan oleh pengguna lain
+                            </p>
+                          </div>
+                        </div>
+                      </label>
+                    </div>
+                    
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="radio"
+                        id="private"
+                        value="false"
+                        {...register('is_public')}
+                        className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 focus:ring-primary-500"
+                      />
+                      <label htmlFor="private" className="flex-1 cursor-pointer">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium text-gray-900 dark:text-white">Private</span>
+                              <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">Eksklusif</span>
+                            </div>
+                            <p className="text-sm text-gray-600 dark:text-gray-300">
+                              Grup hanya dapat diakses melalui kode undangan yang Anda bagikan
+                            </p>
+                          </div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                  
+                  {/* Info about visibility */}
+                  <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <div className="flex items-start space-x-2">
+                      <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm text-blue-800 dark:text-blue-200">
+                        <p className="font-medium mb-1">Tentang Visibilitas:</p>
+                        <ul className="list-disc list-inside space-y-1 text-blue-700 dark:text-blue-300">
+                          <li><strong>Public:</strong> Grup dapat ditemukan dan dijoin oleh siapa saja</li>
+                          <li><strong>Private:</strong> Grup hanya dapat diakses melalui kode undangan</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Info Card */}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <div className="flex items-start space-x-3">
@@ -358,19 +425,11 @@ export default function CreateGroupPage() {
                   <div>
                     <p className="text-sm text-gray-600 dark:text-gray-300">Aplikasi</p>
                     <div className="flex items-center space-x-2 mt-1">
-                      <div className="w-6 h-6 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
-                        {selectedApp.icon_url ? (
-                          <img 
-                            src={selectedApp.icon_url} 
-                            alt={selectedApp.name}
-                            className="w-4 h-4"
-                          />
-                        ) : (
-                          <span className="text-primary-600 font-bold text-xs">
-                            {selectedApp.name.charAt(0)}
-                          </span>
-                        )}
-                      </div>
+                      <AppIcon 
+                        iconUrl={selectedApp.icon_url}
+                        name={selectedApp.name}
+                        size="sm"
+                      />
                       <p className="font-medium text-gray-900 dark:text-white">
                         {selectedApp.name}
                       </p>
@@ -388,6 +447,24 @@ export default function CreateGroupPage() {
                   <p className="font-medium text-gray-900 dark:text-white">
                     {selectedApp?.total_members || maxMembers} anggota
                   </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">Visibilitas</p>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      watch('is_public') === 'true'
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300'
+                        : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                    }`}>
+                      {watch('is_public') === 'true' ? 'Public' : 'Private'}
+                    </span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {watch('is_public') === 'true' 
+                        ? 'Dapat ditemukan di Join Group' 
+                        : 'Hanya melalui undangan'
+                      }
+                    </span>
+                  </div>
                 </div>
                 {selectedApp && (
                   <>

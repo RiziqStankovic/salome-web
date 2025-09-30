@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import DashboardLayout from '@/components/DashboardLayout'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -20,10 +20,16 @@ import {
   Sun,
   Save,
   Eye,
-  EyeOff
+  EyeOff,
+  Settings,
+  Plus,
+  Edit
 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import toast from 'react-hot-toast'
+import { useAuth } from '@/contexts/AuthContext'
+import { accountCredentialsAPI, appAPI } from '@/lib/api'
+import AppIcon from '@/components/AppIcon'
 
 interface NotificationSettings {
   email_notifications: boolean
@@ -45,11 +51,41 @@ interface PrivacySettings {
   analytics: boolean
 }
 
+interface AccountCredentials {
+  id: string
+  user_id: string
+  app_id: string
+  username?: string
+  email?: string
+  created_at: string
+  updated_at: string
+  app?: {
+    name: string
+    icon_url?: string
+    description?: string
+  }
+}
+
+interface App {
+  id: string
+  name: string
+  icon_url?: string
+  description?: string
+}
+
 export default function SettingsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const { user, loading: authLoading } = useAuth()
   const [activeTab, setActiveTab] = useState('notifications')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  
+  // Account credentials state
+  const [accountCredentials, setAccountCredentials] = useState<AccountCredentials[]>([])
+  const [apps, setApps] = useState<App[]>([])
+  const [showAddAccountModal, setShowAddAccountModal] = useState(false)
+  const [editingAccount, setEditingAccount] = useState<AccountCredentials | null>(null)
 
   const { register: registerNotifications, handleSubmit: handleSubmitNotifications } = useForm<NotificationSettings>({
     defaultValues: {
@@ -77,11 +113,77 @@ export default function SettingsPage() {
     }
   })
 
+  // Redirect to homepage if not logged in
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/')
+    }
+  }, [user, authLoading, router])
+
+  // Handle tab from URL parameter
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab && ['notifications', 'security', 'privacy', 'account-apps'].includes(tab)) {
+      setActiveTab(tab)
+    }
+  }, [searchParams])
+
+  // Fetch account credentials and apps
+  useEffect(() => {
+    if (user) {
+      fetchAccountCredentials()
+      fetchApps()
+    }
+  }, [user])
+
+  const fetchAccountCredentials = async () => {
+    try {
+      const response = await accountCredentialsAPI.getUserAccountCredentials()
+      setAccountCredentials(response.data.data || [])
+    } catch (error) {
+      console.error('Error fetching account credentials:', error)
+    }
+  }
+
+  const fetchApps = async () => {
+    try {
+      const response = await appAPI.getApps({ page: 1, page_size: 100 })
+      setApps(response.data.apps || [])
+    } catch (error) {
+      console.error('Error fetching apps:', error)
+    }
+  }
+
+  const handleEditAccount = (account: AccountCredentials) => {
+    setEditingAccount(account)
+    setShowAddAccountModal(true)
+  }
+
+
+  const handleSaveAccount = async (data: {
+    app_id: string
+    username?: string
+    email?: string
+  }) => {
+    setLoading(true)
+    try {
+      await accountCredentialsAPI.createOrUpdateAccountCredentials(data)
+      toast.success(editingAccount ? 'Account berhasil diupdate' : 'Account berhasil ditambahkan')
+      setShowAddAccountModal(false)
+      setEditingAccount(null)
+      fetchAccountCredentials()
+    } catch (error) {
+      toast.error('Gagal menyimpan account')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const tabs = [
     { id: 'notifications', name: 'Notifikasi', icon: Bell },
     { id: 'security', name: 'Keamanan', icon: Shield },
     { id: 'privacy', name: 'Privasi', icon: User },
-    { id: 'billing', name: 'Pembayaran', icon: CreditCard },
+    { id: 'account-apps', name: 'Account Aplikasi', icon: Settings },
   ]
 
   const handleSaveNotifications = async (data: NotificationSettings) => {
@@ -121,6 +223,30 @@ export default function SettingsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-300">Memuat...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show message if not logged in (will redirect)
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-300">Mengarahkan ke halaman login...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -411,52 +537,181 @@ export default function SettingsPage() {
               </Card>
             )}
 
-            {/* Billing Tab */}
-            {activeTab === 'billing' && (
+            {/* Account Apps Tab */}
+            {activeTab === 'account-apps' && (
               <Card className="p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-6">Pengaturan Pembayaran</h2>
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Metode Pembayaran</h3>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <CreditCard className="h-5 w-5 text-gray-400" />
-                          <div>
-                            <p className="font-medium text-gray-900">Bank Transfer</p>
-                            <p className="text-sm text-gray-500">BCA, Mandiri, BNI</p>
-                          </div>
-                        </div>
-                        <Badge variant="success">Aktif</Badge>
-                      </div>
-                      <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <Smartphone className="h-5 w-5 text-gray-400" />
-                          <div>
-                            <p className="font-medium text-gray-900">E-Wallet</p>
-                            <p className="text-sm text-gray-500">GoPay, OVO, DANA</p>
-                          </div>
-                        </div>
-                        <Badge variant="success">Aktif</Badge>
-                      </div>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-semibold text-gray-900">Account Aplikasi</h2>
+                  <Button
+                    onClick={() => setShowAddAccountModal(true)}
+                    className="flex items-center space-x-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Tambah Account</span>
+                  </Button>
+                </div>
+                
+                <div className="space-y-4">
+                  {accountCredentials.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Settings className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">
+                        Belum ada account aplikasi
+                      </h3>
+                      <p className="text-gray-600 mb-4">
+                        Tambahkan account aplikasi untuk grup patungan Anda
+                      </p>
+                       <Button
+                         onClick={() => setShowAddAccountModal(true)}
+                         className="flex items-center space-x-2"
+                       >
+                         <Plus className="h-4 w-4" />
+                         <span>Tambah Account Pertama</span>
+                       </Button>
                     </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Riwayat Pembayaran</h3>
-                    <Button
-                      variant="outline"
-                      onClick={() => router.push('/payments')}
-                    >
-                      Lihat Semua Pembayaran
-                    </Button>
-                  </div>
+                  ) : (
+                     accountCredentials.map((cred) => (
+                       <div key={cred.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
+                         <div className="flex items-center space-x-3">
+                           <AppIcon 
+                             iconUrl={cred.app?.icon_url}
+                             name={cred.app?.name || 'Unknown App'}
+                             size="lg"
+                             className="w-12 h-12 rounded-lg"
+                           />
+                           <div>
+                             <p className="font-medium text-gray-900">{cred.app?.name || 'Unknown App'}</p>
+                             <div className="text-sm text-gray-500 space-y-1">
+                               {cred.email && <p>Email: {cred.email}</p>}
+                               {cred.username && <p>Username: {cred.username}</p>}
+                             </div>
+                           </div>
+                         </div>
+                         <div className="flex items-center space-x-2">
+                           <Button
+                             variant="outline"
+                             size="sm"
+                             onClick={() => handleEditAccount(cred)}
+                             className="flex items-center space-x-1"
+                           >
+                             <Edit className="h-4 w-4" />
+                             <span>Edit</span>
+                           </Button>
+                         </div>
+                       </div>
+                     ))
+                  )}
                 </div>
               </Card>
             )}
           </div>
         </div>
       </div>
+
+      {/* Add/Edit Account Modal */}
+      {showAddAccountModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="p-6 max-w-lg w-full mx-4 dark:bg-gray-800">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              {editingAccount ? 'Edit Account' : 'Tambah Account Aplikasi'}
+            </h3>
+            
+            <form onSubmit={(e) => {
+              e.preventDefault()
+              const formData = new FormData(e.target as HTMLFormElement)
+              const appId = formData.get('app_id') as string
+              const username = formData.get('username') as string
+              const email = formData.get('email') as string
+              
+              handleSaveAccount({
+                app_id: appId,
+                username: username || undefined,
+                email: email || undefined
+              })
+            }}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Pilih Aplikasi
+                  </label>
+                   <select
+                     name="app_id"
+                     required
+                     defaultValue={editingAccount?.app_id || ''}
+                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                   >
+                     <option value="">Pilih aplikasi...</option>
+                     {apps.map((app) => (
+                       <option key={app.id} value={app.id}>
+                         {app.name}
+                       </option>
+                     ))}
+                   </select>
+                   {editingAccount?.app && (
+                     <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                       <div className="flex items-center space-x-2">
+                         <AppIcon 
+                           iconUrl={editingAccount.app.icon_url}
+                           name={editingAccount.app.name}
+                           size="sm"
+                         />
+                         <span className="text-sm text-gray-600 dark:text-gray-300">
+                           Aplikasi yang dipilih: {editingAccount.app.name}
+                         </span>
+                       </div>
+                     </div>
+                   )}
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Username (Opsional)
+                  </label>
+                  <Input
+                    name="username"
+                    type="text"
+                    defaultValue={editingAccount?.username || ''}
+                    placeholder="Masukkan username untuk aplikasi"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Email (Opsional)
+                  </label>
+                  <Input
+                    name="email"
+                    type="email"
+                    defaultValue={editingAccount?.email || ''}
+                    placeholder="Masukkan email untuk aplikasi"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex space-x-2 mt-6">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowAddAccountModal(false)
+                    setEditingAccount(null)
+                  }}
+                  className="flex-1"
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="submit"
+                  className="flex-1"
+                  disabled={loading}
+                >
+                  {loading ? 'Menyimpan...' : (editingAccount ? 'Update' : 'Simpan')}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
     </DashboardLayout>
   )
 }

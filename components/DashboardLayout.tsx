@@ -16,7 +16,10 @@ import {
   Bell,
   Search,
   User,
-  ChevronDown
+  ChevronDown,
+  Mail,
+  Shield,
+  Smartphone
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { generateAvatarUrl } from '@/lib/utils'
@@ -34,6 +37,14 @@ const navigation = [
   { name: 'Pengaturan', href: '/settings', icon: Settings },
 ]
 
+const adminNavigation = [
+  { name: 'Dashboard', href: '/admin', icon: Shield },
+  { name: 'Users', href: '/admin/users', icon: Users },
+  { name: 'Groups', href: '/admin/groups', icon: Users },
+  { name: 'Apps', href: '/admin/apps', icon: Smartphone },
+  { name: 'Email Submissions', href: '/admin/email-submissions', icon: Mail },
+]
+
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
@@ -45,6 +56,34 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     logout()
   }
 
+  // Close profile menu when sidebar is closed
+  useEffect(() => {
+    if (!sidebarOpen) {
+      setProfileMenuOpen(false)
+    }
+  }, [sidebarOpen])
+
+  // Close profile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuOpen) {
+        const target = event.target as Element
+        const profileMenu = document.querySelector('[data-profile-menu]')
+        if (profileMenu && !profileMenu.contains(target)) {
+          setProfileMenuOpen(false)
+        }
+      }
+    }
+
+    if (profileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [profileMenuOpen])
+
   return (
     <VerificationGuard>
       <div className="min-h-screen bg-gray-50">
@@ -54,7 +93,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         sidebarOpen ? 'block' : 'hidden'
       )}>
         <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
-        <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white dark:bg-gray-800">
+        <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white dark:bg-gray-800 overflow-visible">
           <div className="flex h-16 items-center justify-between px-4">
             <div 
               className="flex items-center space-x-2 cursor-pointer"
@@ -100,7 +139,98 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 </Button>
               )
             })}
+            
+            {/* Admin Navigation */}
+            {(user?.role === 'admin' || user?.is_admin) && (
+              <>
+                <div className="border-t border-gray-200 dark:border-gray-700 my-4"></div>
+                <div className="px-3 py-2">
+                  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Admin
+                  </h3>
+                </div>
+                {adminNavigation.map((item) => {
+                  const isActive = pathname === item.href
+                  return (
+                    <Button
+                      key={item.name}
+                      variant={isActive ? 'primary' : 'ghost'}
+                      className={cn(
+                        'w-full justify-start',
+                        isActive ? 'bg-primary-50 dark:bg-primary-900 text-primary-700 dark:text-primary-300' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700'
+                      )}
+                      onClick={() => {
+                        router.push(item.href)
+                        setSidebarOpen(false)
+                      }}
+                    >
+                      <item.icon className="mr-3 h-5 w-5" />
+                      {item.name}
+                    </Button>
+                  )
+                })}
+              </>
+            )}
           </nav>
+          
+          {/* Mobile User Profile Section */}
+          <div className="p-4 border-t border-gray-200 dark:border-gray-700 overflow-visible">
+            <div className="relative overflow-visible" data-profile-menu>
+              <div
+                className="w-full flex items-center justify-start p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer rounded-md"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  console.log('Mobile profile button clicked, current state:', profileMenuOpen)
+                  setProfileMenuOpen(!profileMenuOpen)
+                }}
+              >
+                <div className="w-8 h-8 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center">
+                  <span className="text-primary-600 dark:text-primary-400 font-medium text-sm">
+                    {user?.full_name?.charAt(0)}
+                  </span>
+                </div>
+                <div className="flex-1 text-left ml-3">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                    {user?.full_name}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    {user?.email}
+                  </p>
+                </div>
+                <ChevronDown className="h-4 w-4" />
+              </div>
+
+              {profileMenuOpen && (
+                <div className="absolute bottom-full left-0 right-0 mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg" style={{zIndex: 9999}}>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700"
+                    onClick={() => {
+                      router.push('/profile')
+                      setProfileMenuOpen(false)
+                      setSidebarOpen(false)
+                    }}
+                  >
+                    <User className="mr-3 h-4 w-4" />
+                    Profil
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900"
+                    onClick={() => {
+                      handleLogout()
+                      setProfileMenuOpen(false)
+                      setSidebarOpen(false)
+                    }}
+                  >
+                    <LogOut className="mr-3 h-4 w-4" />
+                    Keluar
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -136,13 +266,46 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 </Button>
               )
             })}
+            
+            {/* Admin Navigation */}
+            {(user?.role === 'admin' || user?.is_admin) && (
+              <>
+                <div className="border-t border-gray-200 dark:border-gray-700 my-4"></div>
+                <div className="px-3 py-2">
+                  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Admin
+                  </h3>
+                </div>
+                {adminNavigation.map((item) => {
+                  const isActive = pathname === item.href
+                  return (
+                    <Button
+                      key={item.name}
+                      variant={isActive ? 'primary' : 'ghost'}
+                      className={cn(
+                        'w-full justify-start px-3',
+                        isActive ? 'bg-primary-50 dark:bg-primary-900 text-primary-700 dark:text-primary-300' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700'
+                      )}
+                      onClick={() => router.push(item.href)}
+                    >
+                      <item.icon className="h-5 w-5 mr-3" />
+                      {item.name}
+                    </Button>
+                  )
+                })}
+              </>
+            )}
           </nav>
           <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="relative">
-              <Button
-                variant="ghost"
-                className="w-full justify-start p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700"
-                onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+            <div className="relative" data-profile-menu>
+              <div
+                className="w-full flex items-center justify-start p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer rounded-md"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  console.log('Desktop profile button clicked, current state:', profileMenuOpen)
+                  setProfileMenuOpen(!profileMenuOpen)
+                }}
               >
                 <div className="w-8 h-8 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center">
                   <span className="text-primary-600 dark:text-primary-400 font-medium text-sm">
@@ -158,10 +321,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   </p>
                 </div>
                 <ChevronDown className="h-4 w-4" />
-              </Button>
+              </div>
 
               {profileMenuOpen && (
-                <div className="absolute bottom-full left-0 right-0 mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
+                <div className="absolute bottom-full left-0 right-0 mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
                   <Button
                     variant="ghost"
                     className="w-full justify-start text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700"

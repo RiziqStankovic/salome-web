@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/Badge'
 import { transactionAPI } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 import DashboardLayout from '@/components/DashboardLayout'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface Transaction {
   id: string
@@ -41,6 +42,7 @@ interface Transaction {
 
 export default function TransactionsPage() {
   const router = useRouter()
+  const { user, loading: authLoading } = useAuth()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -62,9 +64,18 @@ export default function TransactionsPage() {
     { value: 'refund', label: 'Refund' }
   ]
 
+  // Redirect to homepage if not logged in
   useEffect(() => {
-    fetchTransactions()
-  }, [page, searchTerm, selectedType])
+    if (!authLoading && !user) {
+      router.push('/')
+    }
+  }, [user, authLoading, router])
+
+  useEffect(() => {
+    if (user) {
+      fetchTransactions()
+    }
+  }, [page, searchTerm, selectedType, user])
 
   const fetchTransactions = async () => {
     try {
@@ -161,6 +172,30 @@ export default function TransactionsPage() {
       default:
         return type
     }
+  }
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-300">Memuat...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show message if not logged in (will redirect)
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-300">Mengarahkan ke halaman login...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -340,9 +375,6 @@ export default function TransactionsPage() {
                       <p className={`text-lg font-bold ${getTransactionTextColor(transaction.type)}`}>
                         {transaction.type === 'top-up' || transaction.type === 'refund' ? '+' : '-'}
                         {formatCurrency(transaction.amount)}
-                      </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Saldo: {formatCurrency(transaction.balance_after)}
                       </p>
                     </div>
                   </div>

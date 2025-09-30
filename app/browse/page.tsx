@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { appAPI } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
+import AppIcon from '@/components/AppIcon'
 import toast from 'react-hot-toast'
 
 interface App {
@@ -31,6 +32,7 @@ interface App {
   total_price: number
   price_per_user: number
   is_popular: boolean
+  how_it_works?: string
 }
 
 interface AppListResponse {
@@ -69,19 +71,25 @@ export default function BrowsePage() {
         page_size: pagination.pageSize,
         category: selectedCategory || undefined,
         q: searchTerm || undefined,
-        popular: showPopularOnly || undefined
+        popular: showPopularOnly ? true : undefined
       })
       
       const data: AppListResponse = response.data
-      setApps(data.apps)
+      setApps(data.apps || []) // Ensure apps is always an array
       setPagination(prev => ({
         ...prev,
-        total: data.total,
-        totalPages: data.total_pages
+        total: data.total || 0,
+        totalPages: data.total_pages || 0
       }))
     } catch (error) {
       console.error('Failed to fetch apps:', error)
       toast.error('Gagal memuat daftar aplikasi')
+      setApps([]) // Reset to empty array on error
+      setPagination(prev => ({
+        ...prev,
+        total: 0,
+        totalPages: 0
+      }))
     } finally {
       setLoading(false)
     }
@@ -90,9 +98,10 @@ export default function BrowsePage() {
   const fetchCategories = async () => {
     try {
       const response = await appAPI.getAppCategories()
-      setCategories(response.data.categories)
+      setCategories(response.data.categories || [])
     } catch (error) {
       console.error('Failed to fetch categories:', error)
+      setCategories([]) // Reset to empty array on error
     }
   }
 
@@ -212,7 +221,7 @@ export default function BrowsePage() {
         </Card>
 
         {/* Apps Grid */}
-        {apps.length === 0 ? (
+        {!apps || apps.length === 0 ? (
           <Card className="p-12 text-center">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Search className="h-8 w-8 text-gray-400" />
@@ -239,24 +248,12 @@ export default function BrowsePage() {
                 <Card key={app.id} className="p-6 hover:shadow-lg transition-shadow">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center space-x-3">
-                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                        {app.icon_url ? (
-                          <img 
-                            src={app.icon_url} 
-                            alt={app.name}
-                            className="w-8 h-8"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none'
-                              e.currentTarget.nextElementSibling?.classList.remove('hidden')
-                            }}
-                          />
-                        ) : null}
-                        <div className={`w-8 h-8 bg-primary-100 rounded flex items-center justify-center ${app.icon_url ? 'hidden' : ''}`}>
-                          <span className="text-primary-600 font-bold text-sm">
-                            {app.name.charAt(0)}
-                          </span>
-                        </div>
-                      </div>
+                      <AppIcon 
+                        iconUrl={app.icon_url}
+                        name={app.name}
+                        size="lg"
+                        className="w-12 h-12 rounded-lg"
+                      />
                       <div className="flex-1">
                         <h3 className="font-semibold text-gray-900 flex items-center">
                           {app.name}

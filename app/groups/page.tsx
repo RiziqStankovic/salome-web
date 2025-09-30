@@ -35,7 +35,7 @@ interface Group {
   price_per_member?: number
   admin_fee?: number
   total_price?: number
-  status: string
+  group_status: string
   invite_code: string
   owner_id: string
   expires_at?: string
@@ -294,8 +294,8 @@ export default function GroupsPage() {
                         </Badge>
                       )}
                     </div>
-                    <Badge className={`text-xs ${getStatusColor(group.status)}`}>
-                      {getStatusText(group.status)}
+                    <Badge className={`text-xs ${getStatusColor(group.group_status)}`}>
+                      {getStatusText(group.group_status)}
                     </Badge>
                   </div>
 

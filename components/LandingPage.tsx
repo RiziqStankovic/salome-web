@@ -159,7 +159,7 @@ export default function LandingPage() {
   const features = [
     {
       icon: <Users className="h-8 w-8 text-primary-600" />,
-      title: 'Patungan Bersama',
+      title: 'Platform Patungan Bersama',
       description: 'Buat grup dengan teman-teman untuk patungan subscription aplikasi SaaS favorit'
     },
     {
@@ -180,10 +180,10 @@ export default function LandingPage() {
   ]
 
   const stats = [
-    { label: 'Pengguna Aktif', value: '10K+' },
-    { label: 'Grup Dibuat', value: '2K+' },
-    { label: 'Penghematan', value: formatCurrency(50000000) },
-    { label: 'Aplikasi Didukung', value: '100+' }
+    { label: 'Pengguna Aktif', value: '100+' },
+    { label: 'Grup Dibuat', value: '20+' },
+    { label: 'Penghematan', value: '90%' },
+    { label: 'Aplikasi Didukung', value: '10+' }
   ]
 
   const testimonials = [
@@ -303,7 +303,7 @@ export default function LandingPage() {
                 >
                   <div className="flex items-center space-x-1 bg-primary-100 text-primary-700 px-3 py-1 rounded-full text-sm font-medium">
                     <Sparkles className="h-4 w-4" />
-                    <span>Platform #9 di Indonesia</span>
+                    <span>Platform Patungan SaaS Terbaik di Indonesia</span>
                   </div>
                   <div className="flex items-center space-x-1 bg-success-100 text-success-700 px-3 py-1 rounded-full text-sm font-medium">
                     <Crown className="h-4 w-4" />
@@ -317,11 +317,11 @@ export default function LandingPage() {
                   transition={{ duration: 0.8, delay: 0.3 }}
                   className="text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-bold text-gray-900 dark:text-white leading-tight"
                 >
-                  Patungan{' '}
+                  Patungan Satu{' '}
                   <span className="bg-gradient-to-r from-primary-600 via-secondary-600 to-primary-600 bg-clip-text text-transparent animate-gradient bg-[length:200%_auto]">
-                    SaaS
+                    Software
                   </span>{' '}
-                  Bersama
+                  Rame - Rame
                 </motion.h1>
 
                 <motion.p 
@@ -353,10 +353,11 @@ export default function LandingPage() {
                 <Button
                   variant="outline"
                   size="lg"
+                  onClick={() => router.push('/join')}
                   className="px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg hover:scale-105 transition-all duration-200 border-2"
                 >
                   <Target className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-                  Lihat Demo
+                  Lihat Grup
                 </Button>
               </motion.div>
 
@@ -780,8 +781,8 @@ export default function LandingPage() {
               <div className="w-16 h-16 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center mx-auto mb-4">
                 <span className="text-2xl font-bold text-primary-600 dark:text-primary-400">1</span>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Buat Grup</h3>
-              <p className="text-gray-600 dark:text-gray-300">Buat grup dan undang teman-teman dengan kode undangan</p>
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Join atau Buat Grup</h3>
+              <p className="text-gray-600 dark:text-gray-300">Join atau Buat grup kamu sendiri dan undang teman-teman dengan kode undangan</p>
             </div>
 
             <div className="text-center">
@@ -849,7 +850,7 @@ export default function LandingPage() {
             onClick={() => document.getElementById('auth-form')?.scrollIntoView({ behavior: 'smooth' })}
             className="bg-white text-primary-600 hover:bg-gray-100 px-8 py-4 text-lg"
           >
-            Mulai Gratis Sekarang
+            Mulai Sekarang
             <ArrowRight className="ml-2 h-5 w-5" />
           </Button>
         </div>

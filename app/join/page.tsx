@@ -55,9 +55,8 @@ interface Group {
   is_public: boolean
   created_at: string
   host_name?: string
-  host_rating?: number
-  status: string
   group_status: string
+  host_rating?: number
   all_paid_at?: string
   app: {
     icon_url: string
@@ -96,6 +95,7 @@ export default function JoinPage() {
   const [filteredGroups, setFilteredGroups] = useState<Group[]>([])
 
   const appId = searchParams.get('app')
+  const filterAll = searchParams.get('filter') === 'all'
 
   useEffect(() => {
     fetchData()
@@ -109,6 +109,14 @@ export default function JoinPage() {
       fetchGroups()
     }
   }, [appId])
+
+  useEffect(() => {
+    if (filterAll) {
+      setSelectedApp('')
+      setSearchQuery('')
+      setShowFilters(true)
+    }
+  }, [filterAll])
 
   // Search and filter effect
   useEffect(() => {
@@ -443,11 +451,11 @@ export default function JoinPage() {
                         </div>
                       </div>
                       <Badge
-                        variant={getGroupStatusInfo(group.group_status || group.status).variant}
+                        variant={getGroupStatusInfo(group.group_status).variant}
                         className="flex items-center"
                       >
                         <Users className="h-3 w-3 mr-1" />
-                        {getGroupStatusInfo(group.group_status || group.status).text}
+                        {getGroupStatusInfo(group.group_status).text}
                       </Badge>
                     </div>
 

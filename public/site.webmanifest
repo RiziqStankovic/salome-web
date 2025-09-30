@@ -1,0 +1,30 @@
+{
+  "name": "SALOME - Patungan Akun SaaS Bersama",
+  "short_name": "SALOME",
+  "description": "Platform terpercaya untuk patungan dan sharing akun aplikasi SaaS bersama teman-teman. Hemat hingga 90% dengan sistem pembagian biaya yang adil dan aman.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3B82F6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["business", "finance", "productivity"],
+  "lang": "id",
+  "dir": "ltr"
+}
