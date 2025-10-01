@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Cookies from 'js-cookie'
-import { api } from '@/lib/api'
+import { api, otpAPI } from '@/lib/api'
 
 interface User {
   id: string
@@ -103,11 +103,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyOTP = async (email: string, otp: string) => {
     try {
-      const response = await api.post('/auth/verify-otp', { email, otp })
-      const { user } = response.data
+      const response = await otpAPI.verify(email, otp, 'email_verification')
       
-      setUser(user)
-      router.push('/dashboard')
+      if (response.data.valid) {
+        // Refresh user data after successful verification
+        await fetchUser()
+        router.push('/dashboard')
+      } else {
+        throw new Error(response.data.message || 'OTP verification failed')
+      }
     } catch (error: any) {
       throw new Error(error.response?.data?.error || 'OTP verification failed')
     }
@@ -115,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resendOTP = async (email: string) => {
     try {
-      await api.post('/auth/resend-otp', { email })
+      await otpAPI.resend(email, 'email_verification')
     } catch (error: any) {
       throw new Error(error.response?.data?.error || 'Failed to resend OTP')
     }
