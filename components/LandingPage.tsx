@@ -317,7 +317,7 @@ export default function LandingPage() {
                   transition={{ duration: 0.8, delay: 0.3 }}
                   className="text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-bold text-gray-900 dark:text-white leading-tight"
                 >
-                  Patungan Satu{' '}
+                  Solusi Patungan Satu{' '}
                   <span className="bg-gradient-to-r from-primary-600 via-secondary-600 to-primary-600 bg-clip-text text-transparent animate-gradient bg-[length:200%_auto]">
                     Software
                   </span>{' '}
@@ -385,10 +385,10 @@ export default function LandingPage() {
             <div id="auth-form" className="lg:pl-12 mt-8 lg:mt-0">
               <Card className="p-6 sm:p-8 max-w-md mx-auto">
                 <div className="text-center mb-6 sm:mb-8">
-                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
                     {isLogin ? 'Masuk ke SALOME' : 'Daftar ke SALOME'}
                   </h2>
-                  <p className="text-sm sm:text-base text-gray-600 mt-2">
+                  <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 mt-2">
                     {isLogin ? 'Selamat datang kembali!' : 'Bergabunglah dengan komunitas kami'}
                   </p>
                 </div>
@@ -396,7 +396,7 @@ export default function LandingPage() {
                 <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6" noValidate>
                   {/* Error Message */}
                   {error && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center">
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg flex items-center">
                       <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0" />
                       <span className="text-sm">{error}</span>
                     </div>
@@ -438,7 +438,7 @@ export default function LandingPage() {
                       <button
                         type="button"
                         onClick={togglePasswordVisibility}
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
                       >
                         {showPassword ? (
                           <EyeOff className="h-5 w-5" />
@@ -497,7 +497,7 @@ export default function LandingPage() {
               <form onSubmit={handleSearch} className="mb-6">
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="h-5 w-5 text-gray-400" />
+                    <Search className="h-5 w-5 text-gray-400 dark:text-gray-500" />
                   </div>
                   <Input
                     type="text"
@@ -886,20 +886,52 @@ export default function LandingPage() {
             <div>
               <h3 className="text-lg font-semibold mb-4">Produk</h3>
               <ul className="space-y-2 text-gray-400">
-                <li>Patungan Grup</li>
-                <li>Subscription Management</li>
-                <li>Payment Gateway</li>
-                <li>Account Sharing</li>
+                <li>
+                  <a href="/produk/patungan-grup" className="hover:text-white transition-colors">
+                    Patungan Grup
+                  </a>
+                </li>
+                <li>
+                  <a href="/produk/subscription-management" className="hover:text-white transition-colors">
+                    Subscription Management
+                  </a>
+                </li>
+                <li>
+                  <a href="/produk/payment-gateway" className="hover:text-white transition-colors">
+                    Payment Gateway
+                  </a>
+                </li>
+                <li>
+                  <a href="/produk/account-sharing" className="hover:text-white transition-colors">
+                    Account Sharing
+                  </a>
+                </li>
               </ul>
             </div>
 
             <div>
               <h3 className="text-lg font-semibold mb-4">Support</h3>
               <ul className="space-y-2 text-gray-400">
-                <li>Bantuan</li>
-                <li>Kontak</li>
-                <li>FAQ</li>
-                <li>Status</li>
+                <li>
+                  <a href="/support/bantuan" className="hover:text-white transition-colors">
+                    Bantuan
+                  </a>
+                </li>
+                <li>
+                  <a href="/support/kontak" className="hover:text-white transition-colors">
+                    Kontak
+                  </a>
+                </li>
+                <li>
+                  <a href="/support/faq" className="hover:text-white transition-colors">
+                    FAQ
+                  </a>
+                </li>
+                <li>
+                  <a href="/support/status" className="hover:text-white transition-colors">
+                    Status
+                  </a>
+                </li>
               </ul>
             </div>
           </div>

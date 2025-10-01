@@ -48,8 +48,9 @@ interface User {
 interface UserStats {
   total: number
   active: number
-  pending: number
+  pending_verification: number
   suspended: number
+  deleted: number
   admins: number
 }
 
@@ -60,8 +61,9 @@ export default function AdminUsersPage() {
   const [stats, setStats] = useState<UserStats>({
     total: 0,
     active: 0,
-    pending: 0,
+    pending_verification: 0,
     suspended: 0,
+    deleted: 0,
     admins: 0
   })
   const [loading, setLoading] = useState(true)
@@ -105,8 +107,9 @@ export default function AdminUsersPage() {
       setStats(response.data.stats || {
         total: 0,
         active: 0,
-        pending: 0,
+        pending_verification: 0,
         suspended: 0,
+        deleted: 0,
         admins: 0
       })
     } catch (error) {
@@ -116,8 +119,9 @@ export default function AdminUsersPage() {
       setStats({
         total: 0,
         active: 0,
-        pending: 0,
+        pending_verification: 0,
         suspended: 0,
+        deleted: 0,
         admins: 0
       })
     } finally {
@@ -153,12 +157,15 @@ export default function AdminUsersPage() {
         const updated = { ...prev }
         if (newStatus === 'active') {
           updated.active += 1
-          updated.pending -= 1
-        } else if (newStatus === 'pending') {
-          updated.pending += 1
+          updated.pending_verification -= 1
+        } else if (newStatus === 'pending_verification') {
+          updated.pending_verification += 1
           updated.active -= 1
         } else if (newStatus === 'suspended') {
           updated.suspended += 1
+          updated.active -= 1
+        } else if (newStatus === 'deleted') {
+          updated.deleted += 1
           updated.active -= 1
         }
         return updated
@@ -175,10 +182,12 @@ export default function AdminUsersPage() {
     switch (status) {
       case 'active':
         return <Badge variant="success" className="flex items-center space-x-1"><CheckCircle className="h-3 w-3" />Active</Badge>
-      case 'pending':
-        return <Badge variant="warning" className="flex items-center space-x-1"><Clock className="h-3 w-3" />Pending</Badge>
+      case 'pending_verification':
+        return <Badge variant="warning" className="flex items-center space-x-1"><Clock className="h-3 w-3" />Pending Verification</Badge>
       case 'suspended':
         return <Badge variant="error" className="flex items-center space-x-1"><Ban className="h-3 w-3" />Suspended</Badge>
+      case 'deleted':
+        return <Badge variant="error" className="flex items-center space-x-1"><XCircle className="h-3 w-3" />Deleted</Badge>
       default:
         return <Badge variant="gray">{status}</Badge>
     }
@@ -279,7 +288,7 @@ export default function AdminUsersPage() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Pending</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.pending}</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.pending_verification}</p>
               </div>
             </div>
           </Card>
@@ -331,8 +340,9 @@ export default function AdminUsersPage() {
               >
                 <option value="all">Semua Status</option>
                 <option value="active">Active</option>
-                <option value="pending">Pending</option>
+                <option value="pending_verification">Pending Verification</option>
                 <option value="suspended">Suspended</option>
+                <option value="deleted">Deleted</option>
               </select>
             </div>
           </div>

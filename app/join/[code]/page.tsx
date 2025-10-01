@@ -108,7 +108,9 @@ export default function JoinGroupPage({ params }: { params: { code: string } }) 
         page_size: 10,
         app_id: appId 
       })
-      setAvailableGroups(response.data.groups || [])
+      // Filter out closed groups
+      const filteredGroups = (response.data.groups || []).filter((group: Group) => group.group_status !== 'closed')
+      setAvailableGroups(filteredGroups)
     } catch (error) {
       console.error('Error fetching available groups:', error)
       setAvailableGroups([])
@@ -252,11 +254,16 @@ export default function JoinGroupPage({ params }: { params: { code: string } }) 
 
                       <Button
                         onClick={() => router.push(`/join/${availableGroup.invite_code}`)}
-                        disabled={availableGroup.group_status !== 'open'}
+                        disabled={availableGroup.group_status !== 'open' || availableGroup.current_members >= availableGroup.max_members}
                         size="sm"
                         className="w-full"
                       >
-                        {availableGroup.group_status === 'open' ? 'Join Grup' : 'Grup Penuh'}
+                        {availableGroup.group_status !== 'open' 
+                          ? 'Grup Penuh' 
+                          : availableGroup.current_members >= availableGroup.max_members 
+                            ? 'Grup Penuh' 
+                            : 'Join Grup'
+                        }
                       </Button>
                     </Card>
                   ))}

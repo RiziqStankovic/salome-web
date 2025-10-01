@@ -56,7 +56,9 @@ interface GroupStats {
   total: number
   active: number
   pending: number
-  suspended: number
+  closed: number
+  full: number
+  paid: number
   public: number
   private: number
   total_revenue: number
@@ -70,7 +72,9 @@ export default function AdminGroupsPage() {
     total: 0,
     active: 0,
     pending: 0,
-    suspended: 0,
+    closed: 0,
+    full: 0,
+    paid: 0,
     public: 0,
     private: 0,
     total_revenue: 0
@@ -147,7 +151,9 @@ export default function AdminGroupsPage() {
         total: 0,
         active: 0,
         pending: 0,
-        suspended: 0,
+        closed: 0,
+        full: 0,
+        paid: 0,
         public: 0,
         private: 0,
         total_revenue: 0
@@ -160,7 +166,9 @@ export default function AdminGroupsPage() {
         total: 0,
         active: 0,
         pending: 0,
-        suspended: 0,
+        closed: 0,
+        full: 0,
+        paid: 0,
         public: 0,
         private: 0,
         total_revenue: 0
@@ -172,10 +180,10 @@ export default function AdminGroupsPage() {
 
   const filteredGroups = (groups || []).filter(group => {
     const matchesSearch = 
-      group.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      group.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      group.app_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      group.owner_name.toLowerCase().includes(searchTerm.toLowerCase())
+      (group.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (group.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (group.app_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (group.owner_name || '').toLowerCase().includes(searchTerm.toLowerCase())
     
     const matchesStatus = statusFilter === 'all' || group.group_status === statusFilter
     
@@ -187,8 +195,10 @@ export default function AdminGroupsPage() {
       // Map frontend status to backend status
       const statusMapping: { [key: string]: string } = {
         'active': 'open',
-        'suspended': 'closed',
-        'pending': 'private'
+        'closed': 'closed',
+        'private': 'private',
+        'full': 'full',
+        'paid': 'paid_group'
       }
       
       const backendStatus = statusMapping[newStatus] || newStatus
@@ -210,11 +220,17 @@ export default function AdminGroupsPage() {
         if (newStatus === 'active') {
           updated.active += 1
           updated.pending -= 1
-        } else if (newStatus === 'pending') {
+        } else if (newStatus === 'private') {
           updated.pending += 1
           updated.active -= 1
-        } else if (newStatus === 'suspended') {
-          updated.suspended += 1
+        } else if (newStatus === 'closed') {
+          updated.closed += 1
+          updated.active -= 1
+        } else if (newStatus === 'full') {
+          updated.full += 1
+          updated.active -= 1
+        } else if (newStatus === 'paid') {
+          updated.paid += 1
           updated.active -= 1
         }
         return updated
@@ -519,29 +535,23 @@ export default function AdminGroupsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'active':
-        return <Badge variant="success" className="flex items-center space-x-1"><CheckCircle className="h-3 w-3" />Active</Badge>
+      case 'open':
+        return <Badge variant="error" className="flex items-center space-x-1"><XCircle className="h-3 w-3" />Inactive</Badge>
       case 'pending':
-        return <Badge variant="warning" className="flex items-center space-x-1"><Clock className="h-3 w-3" />Pending</Badge>
-      case 'suspended':
-        return <Badge variant="error" className="flex items-center space-x-1"><XCircle className="h-3 w-3" />Suspended</Badge>
+      case 'private':
+        return <Badge variant="warning" className="flex items-center space-x-1"><Clock className="h-3 w-3" />Private</Badge>
+      case 'closed':
+        return <Badge variant="error" className="flex items-center space-x-1"><XCircle className="h-3 w-3" />Closed</Badge>
+      case 'full':
+        return <Badge variant="warning" className="flex items-center space-x-1"><Users className="h-3 w-3" />Full</Badge>
+      case 'paid':
+      case 'paid_group':
+        return <Badge variant="success" className="flex items-center space-x-1"><DollarSign className="h-3 w-3" />Paid</Badge>
       default:
         return <Badge variant="gray">{status}</Badge>
     }
   }
 
-  const getVisibilityBadge = (isPublic: boolean) => {
-    return isPublic ? (
-      <Badge variant="primary" className="flex items-center space-x-1">
-        <Globe className="h-3 w-3" />
-        Public
-      </Badge>
-    ) : (
-      <Badge variant="gray" className="flex items-center space-x-1">
-        <Lock className="h-3 w-3" />
-        Private
-      </Badge>
-    )
-  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('id-ID', {
@@ -615,7 +625,7 @@ export default function AdminGroupsPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
           <Card className="p-6">
             <div className="flex items-center">
               <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
@@ -630,11 +640,11 @@ export default function AdminGroupsPage() {
 
           <Card className="p-6">
             <div className="flex items-center">
-              <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
-                <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+              <div className="p-2 bg-red-100 dark:bg-red-900 rounded-lg">
+                <XCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Active</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Inactive</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.active}</p>
               </div>
             </div>
@@ -643,23 +653,35 @@ export default function AdminGroupsPage() {
           <Card className="p-6">
             <div className="flex items-center">
               <div className="p-2 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
-                <Clock className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
+                <Users className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Pending</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.pending}</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Full</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.full}</p>
               </div>
             </div>
           </Card>
 
           <Card className="p-6">
             <div className="flex items-center">
-              <div className="p-2 bg-orange-100 dark:bg-orange-900 rounded-lg">
-                <DollarSign className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+              <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Revenue</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(stats.total_revenue)}</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Paid Groups</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.paid}</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-red-100 dark:bg-red-900 rounded-lg">
+                <XCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Closed</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.closed}</p>
               </div>
             </div>
           </Card>
@@ -686,9 +708,11 @@ export default function AdminGroupsPage() {
                 className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
                 <option value="all">Semua Status</option>
-                <option value="active">Active</option>
-                <option value="pending">Pending</option>
-                <option value="suspended">Suspended</option>
+                <option value="active">Inactive</option>
+                <option value="private">Private</option>
+                <option value="closed">Closed</option>
+                <option value="full">Full</option>
+                <option value="paid">Paid</option>
               </select>
             </div>
           </div>
@@ -742,7 +766,6 @@ export default function AdminGroupsPage() {
                             {group.name}
                           </h3>
                           {getStatusBadge(group.group_status)}
-                          {getVisibilityBadge(group.is_public)}
                         </div>
                         <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
                           <p>App: {group.app_name}</p>
@@ -777,7 +800,7 @@ export default function AdminGroupsPage() {
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button
+                      {/* <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleChangeOwner(group)}
@@ -785,7 +808,7 @@ export default function AdminGroupsPage() {
                         title="Change Owner"
                       >
                         <Users className="h-4 w-4" />
-                      </Button>
+                      </Button> */}
                       <Button
                         variant="outline"
                         size="sm"
@@ -808,7 +831,7 @@ export default function AdminGroupsPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleStatusChange(group.id, 'suspended')}
+                          onClick={() => handleStatusChange(group.id, 'closed')}
                           className="text-red-600 hover:text-red-700"
                         >
                           <XCircle className="h-4 w-4" />
@@ -901,12 +924,6 @@ export default function AdminGroupsPage() {
                     Status
                   </label>
                   {getStatusBadge(selectedGroup.group_status)}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Visibility
-                  </label>
-                  {getVisibilityBadge(selectedGroup.is_public)}
                 </div>
               </div>
               
@@ -1089,14 +1106,14 @@ export default function AdminGroupsPage() {
               {selectedGroup.group_status === 'open' && (
                 <Button
                   onClick={() => {
-                    handleStatusChange(selectedGroup.id, 'suspended')
+                    handleStatusChange(selectedGroup.id, 'closed')
                     setShowDetailModal(false)
                   }}
                   variant="outline"
                   className="text-red-600 hover:text-red-700"
                 >
                   <XCircle className="h-4 w-4 mr-2" />
-                  Suspend
+                  Close
                 </Button>
               )}
             </div>
@@ -1224,8 +1241,10 @@ export default function AdminGroupsPage() {
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-gray-700 dark:text-white"
                     >
                       <option value="open">Open</option>
+                      <option value="private">Private</option>
+                      <option value="full">Full</option>
+                      <option value="paid_group">Paid Group</option>
                       <option value="closed">Closed</option>
-                      <option value="suspended">Suspended</option>
                     </select>
                   </div>
 
@@ -1239,8 +1258,10 @@ export default function AdminGroupsPage() {
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-gray-700 dark:text-white"
                     >
                       <option value="open">Open</option>
+                      <option value="private">Private</option>
+                      <option value="full">Full</option>
+                      <option value="paid_group">Paid Group</option>
                       <option value="closed">Closed</option>
-                      <option value="removed">Removed</option>
                     </select>
                   </div>
                 </div>

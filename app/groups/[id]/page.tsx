@@ -25,7 +25,9 @@ import {
   Edit,
   UserCheck,
   AlertTriangle,
-  XCircle
+  XCircle,
+  X,
+  LogOut
 } from 'lucide-react'
 import { groupAPI, messageAPI, paymentAPI, accountCredentialsAPI, emailSubmissionsAPI } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
@@ -138,20 +140,40 @@ export default function GroupDetailPage() {
   const [allAccountCredentials, setAllAccountCredentials] = useState<AccountCredentials[]>([])
   const [submittingEmail, setSubmittingEmail] = useState(false)
   const [emailSubmissionStatus, setEmailSubmissionStatus] = useState<string | null>(null)
+  const [approvedEmail, setApprovedEmail] = useState<string | null>(null)
+  const [rejectedEmail, setRejectedEmail] = useState<string | null>(null)
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showLeaveModal, setShowLeaveModal] = useState(false)
   const [selectedNewOwner, setSelectedNewOwner] = useState<string>('')
   const [transferring, setTransferring] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [leaving, setLeaving] = useState(false)
+  const [editForm, setEditForm] = useState({
+    name: '',
+    description: ''
+  })
+  const [paidMembersCount, setPaidMembersCount] = useState(0)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (groupId) {
+      console.log('🔄 Initial page load - fetching all data for group:', groupId)
       fetchGroupDetails()
       fetchMessages()
       fetchMembers()
+      
+      // Also try to check email status immediately if we have the data
+      setTimeout(() => {
+        if (group?.id && group?.app?.id && user) {
+          console.log('⏰ Timeout fallback: Checking email submission status')
+          checkEmailSubmissionStatus()
+        }
+      }, 2000) // Wait 2 seconds for data to load
     }
   }, [groupId])
 
@@ -163,9 +185,37 @@ export default function GroupDetailPage() {
     }
   }, [group?.app?.id, user])
 
+  // Check email submission status after group and user data are loaded
+  useEffect(() => {
+    console.log('🔍 useEffect dependencies check:', {
+      groupId: group?.id,
+      appId: group?.app?.id,
+      userId: user?.id,
+      hasGroup: !!group,
+      hasApp: !!group?.app,
+      hasUser: !!user
+    })
+    
+    if (group?.id && group?.app?.id && user) {
+      console.log('🚀 useEffect triggered: Checking email submission status on page load')
+      checkEmailSubmissionStatus()
+    } else {
+      console.log('❌ useEffect not triggered: Missing dependencies')
+    }
+  }, [group?.id, group?.app?.id, user])
+
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  // Calculate paid members count when members change
+  useEffect(() => {
+    const paidCount = members.filter(member => 
+      member.user_status === 'paid'
+    ).length
+    setPaidMembersCount(paidCount)
+    console.log('💰 Paid members count updated:', paidCount, 'out of', members.length)
+  }, [members])
 
   // Auto scroll to bottom when component mounts
   useEffect(() => {
@@ -214,7 +264,16 @@ export default function GroupDetailPage() {
       // Backend returns data in format: {"group": groupResponse}
       const groupData = response.data.group
       console.log('Final group data:', groupData)
+      console.log('Group app data:', groupData?.app)
       setGroup(groupData)
+      
+      // Check email submission status after group data is loaded
+      if (groupData?.app?.id && user) {
+        console.log('📋 fetchGroupDetails: Checking email submission status after group data loaded')
+        checkEmailSubmissionStatus()
+      } else {
+        console.log('❌ fetchGroupDetails: Cannot check email status - missing app or user data')
+      }
     } catch (error: any) {
       console.error('Error fetching group details:', error)
       console.error('Error response:', error.response)
@@ -244,6 +303,11 @@ export default function GroupDetailPage() {
       if (response.data.data?.email) {
         setSelectedEmail(response.data.data.email)
       }
+      
+      // Check email submission status after account credentials are loaded
+      if (user) {
+        checkEmailSubmissionStatus()
+      }
     } catch (error: any) {
       console.error('Error fetching account credentials:', error)
       // If no credentials found, set to null (will use user data as fallback)
@@ -251,6 +315,82 @@ export default function GroupDetailPage() {
       setSelectedEmail('')
     } finally {
       setLoadingCredentials(false)
+    }
+  }
+
+  const checkEmailSubmissionStatus = async () => {
+    if (!group?.id || !group?.app?.id) {
+      console.log('❌ Cannot check email submission status: missing group or app data', {
+        groupId: group?.id,
+        appId: group?.app?.id,
+        hasGroup: !!group,
+        hasApp: !!group?.app
+      })
+      return
+    }
+    
+    try {
+      console.log('🔍 Checking email submission status for group:', group.id, 'app:', group.app.id)
+      console.log('📡 Calling API: GET /api/v1/email-submissions?group_id=' + group.id)
+      const response = await emailSubmissionsAPI.getEmailSubmissions(group.id)
+      console.log('📨 Email submissions API response:', response.data)
+      
+      // Extract submissions from response.data.data (API returns {data: [...], success: true})
+      const submissions = response.data.data || []
+      console.log('📋 Extracted submissions:', submissions)
+      
+      // Check if there's an approved submission for this group
+      const approvedSubmission = submissions.find((sub: any) => 
+        sub.group_id === group.id && 
+        sub.app_id === group.app.id && 
+        sub.status === 'approved'
+      )
+      
+      if (approvedSubmission) {
+        console.log('✅ Found approved submission:', approvedSubmission)
+        setEmailSubmissionStatus('approved')
+        setApprovedEmail(approvedSubmission.email)
+        setRejectedEmail(null)
+        console.log('✅ Status set to: approved')
+      } else {
+        // Check if there's a rejected submission
+        const rejectedSubmission = submissions.find((sub: any) => 
+          sub.group_id === group.id && 
+          sub.app_id === group.app.id && 
+          sub.status === 'rejected'
+        )
+        
+        if (rejectedSubmission) {
+          console.log('❌ Found rejected submission:', rejectedSubmission)
+          setEmailSubmissionStatus('rejected')
+          setRejectedEmail(rejectedSubmission.email)
+          setApprovedEmail(null)
+          console.log('✅ Status set to: rejected')
+        } else {
+          // Check if there's a pending submission
+          const pendingSubmission = submissions.find((sub: any) => 
+            sub.group_id === group.id && 
+            sub.app_id === group.app.id && 
+            sub.status === 'pending'
+          )
+          
+          if (pendingSubmission) {
+            console.log('⏳ Found pending submission:', pendingSubmission)
+            setEmailSubmissionStatus('submitted')
+            setApprovedEmail(null)
+            setRejectedEmail(null)
+            console.log('✅ Status set to: submitted (pending)')
+          } else {
+            console.log('❓ No email submission found for this group')
+            setEmailSubmissionStatus(null)
+            setApprovedEmail(null)
+            setRejectedEmail(null)
+            console.log('✅ Status set to: null (no submission)')
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('Error checking email submission status:', error)
     }
   }
 
@@ -276,6 +416,11 @@ export default function GroupDetailPage() {
         return dateA - dateB
       })
       setMessages(sortedMessages)
+      
+      // Check email submission status after messages are loaded
+      if (group?.app?.id && user) {
+        checkEmailSubmissionStatus()
+      }
     } catch (error: any) {
       console.error('Error fetching messages:', error)
       if (error.response?.status === 403) {
@@ -293,6 +438,11 @@ export default function GroupDetailPage() {
       setLoadingMembers(true)
       const response = await groupAPI.getGroupMembers(groupId)
       setMembers(response.data.members || [])
+      
+      // Check email submission status after members are loaded
+      if (group?.app?.id && user) {
+        checkEmailSubmissionStatus()
+      }
     } catch (error: any) {
       console.error('Error fetching members:', error)
       if (error.response?.status === 403) {
@@ -436,6 +586,11 @@ export default function GroupDetailPage() {
       
       setEmailSubmissionStatus('submitted')
       toast.success('Email berhasil diajukan untuk grup patungan!')
+      
+      // Re-check email submission status to ensure consistency
+      setTimeout(() => {
+        checkEmailSubmissionStatus()
+      }, 1000)
     } catch (error: any) {
       console.error('Error submitting email:', error)
       if (error.response?.data?.message) {
@@ -515,6 +670,56 @@ export default function GroupDetailPage() {
       toast.error(error.response?.data?.error || 'Gagal menghapus grup')
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const handleEditGroup = () => {
+    if (!group) return
+    
+    setEditForm({
+      name: group.name || '',
+      description: group.description || ''
+    })
+    setShowEditModal(true)
+  }
+
+  const handleUpdateGroup = async () => {
+    if (!group) return
+
+    setEditing(true)
+    try {
+      await groupAPI.updateGroup(group.id, editForm)
+      
+      toast.success('Grup berhasil diperbarui!')
+      setShowEditModal(false)
+      
+      // Refresh group data
+      fetchGroupDetails()
+    } catch (error: any) {
+      console.error('Error updating group:', error)
+      toast.error(error.response?.data?.error || 'Gagal memperbarui grup')
+    } finally {
+      setEditing(false)
+    }
+  }
+
+  const handleLeaveGroup = async () => {
+    if (!group) return
+
+    setLeaving(true)
+    try {
+      await groupAPI.leaveGroup(group.id)
+      
+      toast.success('Berhasil keluar dari grup!')
+      setShowLeaveModal(false)
+      
+      // Redirect to groups page
+      router.push('/groups')
+    } catch (error: any) {
+      console.error('Error leaving group:', error)
+      toast.error(error.response?.data?.error || 'Gagal keluar dari grup')
+    } finally {
+      setLeaving(false)
     }
   }
 
@@ -613,9 +818,15 @@ export default function GroupDetailPage() {
                   Bagikan
                 </Button>
               )}
-              <Button variant="outline">
-                <Settings className="h-4 w-4" />
-              </Button>
+              <div className="relative">
+                <Button 
+                  variant="outline"
+                  onClick={() => setShowLeaveModal(true)}
+                  title="Keluar dari Grup"
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
         </motion.div>
@@ -759,10 +970,32 @@ export default function GroupDetailPage() {
               >
                 {/* Informasi User untuk Grup Patungan */}
                 <Card className="p-6 dark:bg-gray-800">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                    <Users className="h-5 w-5 mr-2 text-primary-600" />
-                    Informasi Akun Anda untuk Grup Patungan
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                      <Users className="h-5 w-5 mr-2 text-primary-600" />
+                      Informasi Akun Anda untuk Grup Patungan
+                    </h3>
+                    {/* Debug Button - Temporary */}
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => {
+                        console.log('🔧 Manual check triggered')
+                        console.log('Current state:', { 
+                          groupId: group?.id, 
+                          appId: group?.app?.id,
+                          userId: user?.id,
+                          currentStatus: emailSubmissionStatus,
+                          approvedEmail,
+                          rejectedEmail
+                        })
+                        checkEmailSubmissionStatus()
+                      }}
+                      className="text-xs"
+                    >
+                      🔧 Check Status ({emailSubmissionStatus || 'none'})
+                    </Button>
+                  </div>
                   <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
                     <div className="flex items-start space-x-3">
                       <div className="flex-shrink-0">
@@ -775,7 +1008,7 @@ export default function GroupDetailPage() {
                           Akun Anda yang akan didaftarkan
                         </h4>
                         <p className="text-xs text-blue-700 dark:text-blue-300">
-                          Email dan nama Anda ini akan digunakan untuk bergabung ke grup patungan {group?.app?.name}. Pastikan Anda sudah memiliki akun {group?.app?.name}.
+                          Pastikan Anda sudah memiliki akun {group?.app?.name}.
                         </p>
                       </div>
                     </div>
@@ -784,7 +1017,7 @@ export default function GroupDetailPage() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Email Anda untuk Grup Patungan
+                        Sesuaikan Email anda untuk Grup Patungan akun {group?.app?.name}.
                       </label>
                       <div className="flex items-center space-x-2">
                         <div className="flex-1 relative">
@@ -938,18 +1171,63 @@ export default function GroupDetailPage() {
                     </div>
 
                     {/* Account Verification Status */}
-                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                    <div className={`${
+                      emailSubmissionStatus === 'approved' ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' :
+                      emailSubmissionStatus === 'rejected' ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' :
+                      emailSubmissionStatus === 'submitted' ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800' :
+                      'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                    } border rounded-lg p-4`}>
                       <div className="flex items-start space-x-3">
                         <div className="flex-shrink-0">
-                          <div className="w-8 h-8 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
-                            <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          <div className={`w-8 h-8 ${
+                            emailSubmissionStatus === 'approved' ? 'bg-green-100 dark:bg-green-900' :
+                            emailSubmissionStatus === 'rejected' ? 'bg-red-100 dark:bg-red-900' :
+                            emailSubmissionStatus === 'submitted' ? 'bg-yellow-100 dark:bg-yellow-900' :
+                            'bg-green-100 dark:bg-green-900'
+                          } rounded-full flex items-center justify-center`}>
+                            {emailSubmissionStatus === 'approved' ? (
+                              <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                            ) : emailSubmissionStatus === 'rejected' ? (
+                              <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                            ) : emailSubmissionStatus === 'submitted' ? (
+                              <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                            ) : (
+                              <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                            )}
                           </div>
                         </div>
                         <div className="flex-1">
-                          <h4 className="text-sm font-medium text-green-900 dark:text-green-100 mb-1">
-                            Status Akun Anda
-                          </h4>
-                          <p className="text-xs text-green-700 dark:text-green-300 mb-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <h4 className={`text-sm font-medium ${
+                              emailSubmissionStatus === 'approved' ? 'text-green-900 dark:text-green-100' :
+                              emailSubmissionStatus === 'rejected' ? 'text-red-900 dark:text-red-100' :
+                              emailSubmissionStatus === 'submitted' ? 'text-yellow-900 dark:text-yellow-100' :
+                              'text-green-900 dark:text-green-100'
+                            }`}>
+                              Status Akun Anda
+                            </h4>
+                            {emailSubmissionStatus && (
+                              <Badge 
+                                variant={
+                                  emailSubmissionStatus === 'approved' ? 'success' : 
+                                  emailSubmissionStatus === 'rejected' ? 'error' : 
+                                  'warning'
+                                }
+                                className="text-xs"
+                              >
+                                {emailSubmissionStatus === 'approved' ? '✓ Disetujui' : 
+                                 emailSubmissionStatus === 'rejected' ? '✗ Ditolak' : 
+                                 emailSubmissionStatus === 'submitted' ? '⏳ Menunggu Review' : 
+                                 'Status Tidak Diketahui'}
+                              </Badge>
+                            )}
+                          </div>
+                          <p className={`text-xs mb-2 ${
+                            emailSubmissionStatus === 'approved' ? 'text-green-700 dark:text-green-300' :
+                            emailSubmissionStatus === 'rejected' ? 'text-red-700 dark:text-red-300' :
+                            emailSubmissionStatus === 'submitted' ? 'text-yellow-700 dark:text-yellow-300' :
+                            'text-green-700 dark:text-green-300'
+                          }`}>
                             Pastikan Anda sudah memiliki akun {group?.app?.name} dan terdaftar jika belum silahkan daftar terlebih dahulu.
                           </p>
                           <div className="flex items-center space-x-4 text-xs">
@@ -962,6 +1240,9 @@ export default function GroupDetailPage() {
                                 )}
                                 {!accountCredentials?.email && selectedEmail === user?.email && (
                                   <span className="text-orange-600 dark:text-orange-400 ml-1">(Profil)</span>
+                                )}
+                                {emailSubmissionStatus === 'approved' && approvedEmail === getCurrentEmail() && (
+                                  <span className="text-green-600 dark:text-green-400 ml-1 font-semibold">✓ Disetujui</span>
                                 )}
                               </span>
                             </div>
@@ -978,6 +1259,31 @@ export default function GroupDetailPage() {
                               </span>
                             </div>
                           </div>
+                          {/* Status Information */}
+                          {emailSubmissionStatus === 'approved' && approvedEmail && (
+                            <div className="mt-2 p-2 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded text-xs text-green-800 dark:text-green-200">
+                              <div className="flex items-center space-x-1">
+                                <CheckCircle className="h-3 w-3 text-green-600" />
+                                <span className="font-medium">Email yang disetujui: {approvedEmail}</span>
+                              </div>
+                            </div>
+                          )}
+                          {emailSubmissionStatus === 'rejected' && rejectedEmail && (
+                            <div className="mt-2 p-2 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded text-xs text-red-800 dark:text-red-200">
+                              <div className="flex items-center space-x-1">
+                                <XCircle className="h-3 w-3 text-red-600" />
+                                <span className="font-medium">Email yang ditolak: {rejectedEmail}</span>
+                              </div>
+                            </div>
+                          )}
+                          {emailSubmissionStatus === 'submitted' && (
+                            <div className="mt-2 p-2 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded text-xs text-yellow-800 dark:text-yellow-200">
+                              <div className="flex items-center space-x-1">
+                                <Clock className="h-3 w-3 text-yellow-600" />
+                                <span className="font-medium">Email sedang menunggu review admin</span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -994,8 +1300,8 @@ export default function GroupDetailPage() {
                             Penting untuk Grup Patungan
                           </p>
                           <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-2">
-                            Pastikan Anda sudah memiliki akun {group?.app?.name} dengan email dan nama yang sama seperti yang ditampilkan di atas.
-                            {accountCredentials ? ' Data ini berasal dari Account Aplikasi Anda.' : ' Data ini berasal dari profil Anda.'}
+                            Jika Akun berbeda dengan akun SALOME, silahkan kelola akun anda di akun SALOME lalu ajukan email kembali.
+                            {accountCredentials ? '' : ''}
                           </p>
                           <div className="flex items-center space-x-2">
                             <button
@@ -1004,7 +1310,7 @@ export default function GroupDetailPage() {
                             >
                               Kelola Account Aplikasi →
                             </button>
-                            {emailSubmissionStatus !== 'submitted' && (
+                            {!emailSubmissionStatus && (
                               <Button
                                 size="sm"
                                 onClick={submitEmailForGroup}
@@ -1014,10 +1320,63 @@ export default function GroupDetailPage() {
                                 {submittingEmail ? 'Mengajukan...' : 'Ajukan Email'}
                               </Button>
                             )}
+                            {emailSubmissionStatus === 'rejected' && (
+                              <Button
+                                size="sm"
+                                onClick={submitEmailForGroup}
+                                disabled={submittingEmail}
+                                className="text-xs px-2 py-1 h-6 bg-red-600 hover:bg-red-700 text-white"
+                              >
+                                {submittingEmail ? 'Mengajukan...' : 'Ajukan Email Baru'}
+                              </Button>
+                            )}
                           </div>
-                          {emailSubmissionStatus === 'submitted' && (
-                            <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded text-xs text-green-700 dark:text-green-300">
-                              ✅ Email berhasil diajukan! Admin akan meninjau pengajuan Anda.
+                          
+                          {/* Status Email Submission - Tampilan Utama */}
+                          {emailSubmissionStatus && (
+                            <div className={`mt-3 p-3 rounded-lg border-2 ${
+                              emailSubmissionStatus === 'submitted' ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700' :
+                              emailSubmissionStatus === 'approved' ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' :
+                              emailSubmissionStatus === 'rejected' ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' :
+                              'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700'
+                            }`}>
+                              <div className="flex items-center space-x-2">
+                                {emailSubmissionStatus === 'submitted' && (
+                                  <>
+                                    <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                                    <span className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                                      ⏳ Status: Menunggu Review Admin
+                                    </span>
+                                  </>
+                                )}
+                                {emailSubmissionStatus === 'approved' && (
+                                  <>
+                                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                    <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                                      ✅ Status: Email Disetujui
+                                    </span>
+                                  </>
+                                )}
+                                {emailSubmissionStatus === 'rejected' && (
+                                  <>
+                                    <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                                    <span className="text-sm font-medium text-red-800 dark:text-red-200">
+                                      ❌ Status: Email Ditolak
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                              <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                                {emailSubmissionStatus === 'submitted' && (
+                                  <>Email berhasil diajukan! Admin akan meninjau pengajuan Anda.</>
+                                )}
+                                {emailSubmissionStatus === 'approved' && approvedEmail && (
+                                  <>Email <strong className="text-green-700 dark:text-green-300">{approvedEmail}</strong> telah disetujui! Anda dapat bergabung ke grup patungan.</>
+                                )}
+                                {emailSubmissionStatus === 'rejected' && rejectedEmail && (
+                                  <>Email <strong className="text-red-700 dark:text-red-300">{rejectedEmail}</strong> ditolak. Silakan ajukan email lain atau kelola akun aplikasi Anda.</>
+                                )}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -1072,9 +1431,15 @@ export default function GroupDetailPage() {
                               {formatCurrency(member.price_per_member + 3500)}
                             </p>
                             <Badge 
-                              variant={member.user_status === 'paid' ? 'success' : 'warning'}
+                              variant={
+                                member.user_status === 'paid' ? 'success' : 
+                                member.user_status === 'active' ? 'primary' : 
+                                'warning'
+                              }
                             >
-                              {member.user_status === 'paid' ? 'Lunas' : 'Pending'}
+                              {member.user_status === 'paid' ? 'Lunas' : 
+                               member.user_status === 'active' ? 'Active' : 
+                               'Pending'}
                             </Badge>
                           </div>
                           {isOwner && member.user_id !== group?.owner_id && (
@@ -1212,7 +1577,11 @@ export default function GroupDetailPage() {
                     </div>
                     <div className="space-y-4">
                     <div className="flex space-x-2">
-                      <Button variant="outline" className="flex-1">
+                      <Button 
+                        variant="outline" 
+                        className="flex-1"
+                        onClick={handleEditGroup}
+                      >
                         <Edit className="h-4 w-4 mr-2" />
                         Edit Grup
                       </Button>
@@ -1323,11 +1692,11 @@ export default function GroupDetailPage() {
                   </span>
                 </div>
 
-                {/* Member Count */}
+                {/* Paid Members Count */}
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-300">Total Anggota</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-300">Total yang Sudah Bayar</span>
                   <span className="font-semibold text-gray-900 dark:text-white">
-                    {group?.member_count || group?.current_members || 0}
+                    {paidMembersCount} / {group?.max_members || 0}
                   </span>
                 </div>
 
@@ -1654,6 +2023,140 @@ export default function GroupDetailPage() {
                     <Trash2 className="h-4 w-4 mr-2" />
                   )}
                   {deleting ? 'Menghapus...' : 'Ya, Hapus Grup'}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Edit Group Modal */}
+        {showEditModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <Card className="p-6 max-w-md w-full mx-4 dark:bg-gray-800">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Edit Grup
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowEditModal(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Nama Grup
+                  </label>
+                  <Input
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                    placeholder="Masukkan nama grup"
+                    className="w-full"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Deskripsi Grup
+                  </label>
+                  <textarea
+                    value={editForm.description}
+                    onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                    placeholder="Masukkan deskripsi grup"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              <div className="flex space-x-2 mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1"
+                >
+                  Batal
+                </Button>
+                <Button
+                  onClick={handleUpdateGroup}
+                  disabled={editing || !editForm.name.trim()}
+                  className="flex-1"
+                >
+                  {editing ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  ) : (
+                    <Edit className="h-4 w-4 mr-2" />
+                  )}
+                  {editing ? 'Menyimpan...' : 'Simpan Perubahan'}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Leave Group Modal */}
+        {showLeaveModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <Card className="p-6 max-w-md w-full mx-4 dark:bg-gray-800">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Keluar dari Grup
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowLeaveModal(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                  <div className="flex items-start space-x-2">
+                    <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+                    <div>
+                      <p className="text-xs text-yellow-800 dark:text-yellow-200 font-medium mb-1">
+                        Peringatan
+                      </p>
+                      <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                        {isOwner 
+                          ? "Sebagai owner, Anda tidak bisa keluar dari grup. Transfer kepemilikan terlebih dahulu atau hapus grup."
+                          : "Setelah keluar dari grup, Anda tidak akan bisa mengakses grup ini lagi dan harus bergabung ulang jika ingin kembali."
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Apakah Anda yakin ingin keluar dari grup <strong>{group?.name}</strong>?
+                </p>
+              </div>
+
+              <div className="flex space-x-2 mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowLeaveModal(false)}
+                  className="flex-1"
+                >
+                  Batal
+                </Button>
+                <Button
+                  onClick={handleLeaveGroup}
+                  disabled={leaving || isOwner}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                >
+                  {leaving ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  ) : (
+                    <LogOut className="h-4 w-4 mr-2" />
+                  )}
+                  {leaving ? 'Keluar...' : 'Ya, Keluar'}
                 </Button>
               </div>
             </Card>

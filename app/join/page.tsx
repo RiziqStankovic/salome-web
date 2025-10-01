@@ -122,6 +122,9 @@ export default function JoinPage() {
   useEffect(() => {
     let filtered = groups
 
+    // Filter out closed groups
+    filtered = filtered.filter(group => group.group_status !== 'closed')
+
     // Apply search filter
     if (searchQuery.trim()) {
       filtered = filtered.filter(group => {
@@ -395,7 +398,7 @@ export default function JoinPage() {
           {filteredGroups.length === 0 ? (
             <Card className="p-12 text-center">
               <div className="w-20 h-20 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Users className="h-10 w-10 text-slate-400" />
+                <Users className="h-10 w-10 text-slate-400 dark:text-slate-500" />
               </div>
               <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
                 No groups found
@@ -519,10 +522,15 @@ export default function JoinPage() {
                     <div className="space-y-2">
                       <Button
                         onClick={() => router.push(`/join/${group.invite_code}`)}
-                        className="w-full bg-primary-600 hover:bg-primary-700 text-white"
+                        disabled={group.current_members >= group.max_members}
+                        className={`w-full ${
+                          group.current_members >= group.max_members 
+                            ? 'bg-gray-400 cursor-not-allowed' 
+                            : 'bg-primary-600 hover:bg-primary-700'
+                        } text-white`}
                       >
                         <Users className="h-4 w-4 mr-2" />
-                        Join Group
+                        {group.current_members >= group.max_members ? 'Group Full' : 'Join Group'}
                       </Button>
                       <Button
                         variant="outline"

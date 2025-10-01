@@ -39,6 +39,9 @@ interface App {
   is_active: boolean
   is_available: boolean
   how_it_works?: string
+  total_price: number
+  max_group_members: number
+  admin_fee_percentage: number
   created_at: string
   updated_at: string
   groups_count: number
@@ -82,6 +85,9 @@ export default function AdminAppsPage() {
     category: '',
     icon_url: '',
     how_it_works: '',
+    total_price: 0,
+    max_group_members: 5,
+    admin_fee_percentage: 10,
     is_active: true,
     is_available: true
   })
@@ -213,6 +219,9 @@ export default function AdminAppsPage() {
       category: '',
       icon_url: '',
       how_it_works: '',
+      total_price: 0,
+      max_group_members: 5,
+      admin_fee_percentage: 10,
       is_active: true,
       is_available: true
     })
@@ -227,6 +236,9 @@ export default function AdminAppsPage() {
       category: app.category,
       icon_url: app.icon_url || '',
       how_it_works: app.how_it_works || '',
+      total_price: app.total_price || 0,
+      max_group_members: app.max_group_members || 5,
+      admin_fee_percentage: app.admin_fee_percentage || 10,
       is_active: app.is_active,
       is_available: app.is_available
     })
@@ -236,6 +248,21 @@ export default function AdminAppsPage() {
   const handleSaveApp = async () => {
     if (!appForm.name || !appForm.description || !appForm.category) {
       toast.error('Nama, deskripsi, dan kategori harus diisi')
+      return
+    }
+
+    if (appForm.total_price <= 0) {
+      toast.error('Total harga harus lebih dari 0')
+      return
+    }
+
+    if (appForm.max_group_members <= 0) {
+      toast.error('Max anggota grup harus lebih dari 0')
+      return
+    }
+
+    if (appForm.admin_fee_percentage < 0 || appForm.admin_fee_percentage > 100) {
+      toast.error('Persentase admin fee harus antara 0-100')
       return
     }
 
@@ -251,6 +278,9 @@ export default function AdminAppsPage() {
           category: appForm.category,
           icon_url: appForm.icon_url,
           how_it_works: appForm.how_it_works,
+          total_price: appForm.total_price,
+          max_group_members: appForm.max_group_members,
+          admin_fee_percentage: appForm.admin_fee_percentage,
           is_active: appForm.is_active,
           is_available: appForm.is_available
         })
@@ -270,6 +300,9 @@ export default function AdminAppsPage() {
           category: appForm.category,
           icon_url: appForm.icon_url,
           how_it_works: appForm.how_it_works,
+          total_price: appForm.total_price,
+          max_group_members: appForm.max_group_members,
+          admin_fee_percentage: appForm.admin_fee_percentage,
           is_active: appForm.is_active,
           is_available: appForm.is_available
         })
@@ -561,6 +594,7 @@ export default function AdminAppsPage() {
                           <p>Category: {app.category}</p>
                           <p>{app.description}</p>
                           <p>Groups: {app.groups_count} | Revenue: {formatCurrency(app.total_revenue)}</p>
+                          <p>Total Price: {formatCurrency(app.total_price)} | Max Members: {app.max_group_members} | Admin Fee: {app.admin_fee_percentage}%</p>
                           <p>Avg Price: {formatCurrency(app.avg_price)} | Updated: {formatDate(app.updated_at)}</p>
                         </div>
                       </div>
@@ -683,12 +717,42 @@ export default function AdminAppsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Total Price
+                  </label>
+                  <p className="text-sm text-gray-900 dark:text-white">
+                    {formatCurrency(selectedApp.total_price)}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Max Group Members
+                  </label>
+                  <p className="text-sm text-gray-900 dark:text-white">
+                    {selectedApp.max_group_members}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Admin Fee Percentage
+                  </label>
+                  <p className="text-sm text-gray-900 dark:text-white">
+                    {selectedApp.admin_fee_percentage}%
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Groups Count
                   </label>
                   <p className="text-sm text-gray-900 dark:text-white">
                     {selectedApp.groups_count}
                   </p>
                 </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Total Revenue
@@ -697,15 +761,14 @@ export default function AdminAppsPage() {
                     {formatCurrency(selectedApp.total_revenue)}
                   </p>
                 </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Average Price
-                </label>
-                <p className="text-sm text-gray-900 dark:text-white">
-                  {formatCurrency(selectedApp.avg_price)}
-                </p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Average Price
+                  </label>
+                  <p className="text-sm text-gray-900 dark:text-white">
+                    {formatCurrency(selectedApp.avg_price)}
+                  </p>
+                </div>
               </div>
               
               <div>
@@ -825,6 +888,46 @@ export default function AdminAppsPage() {
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   rows={3}
                 />
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Total Price *
+                  </label>
+                  <Input
+                    type="number"
+                    value={appForm.total_price}
+                    onChange={(e) => setAppForm(prev => ({ ...prev, total_price: parseInt(e.target.value) || 0 }))}
+                    placeholder="Masukkan total harga"
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Max Group Members *
+                  </label>
+                  <Input
+                    type="number"
+                    value={appForm.max_group_members}
+                    onChange={(e) => setAppForm(prev => ({ ...prev, max_group_members: parseInt(e.target.value) || 1 }))}
+                    placeholder="Masukkan max anggota"
+                    min="1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Admin Fee Percentage *
+                  </label>
+                  <Input
+                    type="number"
+                    value={appForm.admin_fee_percentage}
+                    onChange={(e) => setAppForm(prev => ({ ...prev, admin_fee_percentage: parseInt(e.target.value) || 0 }))}
+                    placeholder="Masukkan persentase admin fee"
+                    min="0"
+                    max="100"
+                  />
+                </div>
               </div>
               
               <div className="grid grid-cols-2 gap-4">

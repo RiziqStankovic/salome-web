@@ -97,7 +97,8 @@ export default function GroupsPage() {
     const matchesSearch = group.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (group.app?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = !selectedCategory || group.app?.category === selectedCategory
-    return matchesSearch && matchesCategory
+    const isNotClosed = group.group_status !== 'closed'
+    return matchesSearch && matchesCategory && isNotClosed
   })
 
   const getStatusColor = (status: string) => {
@@ -275,8 +276,8 @@ export default function GroupsPage() {
                           }}
                         />
                       ) : null}
-                      <div className={`w-8 h-8 bg-primary-100 rounded flex items-center justify-center ${group.app?.icon_url ? 'hidden' : ''}`}>
-                        <span className="text-primary-600 font-bold text-sm">
+                      <div className={`w-8 h-8 bg-primary-100 dark:bg-primary-900 rounded flex items-center justify-center ${group.app?.icon_url ? 'hidden' : ''}`}>
+                        <span className="text-primary-600 dark:text-primary-400 font-bold text-sm">
                           {(group.app?.name || group.name).charAt(0)}
                         </span>
                       </div>
@@ -324,7 +325,7 @@ export default function GroupsPage() {
 
                   {/* Price Breakdown */}
                   {group.price_per_member && (
-                    <div className="mb-4 p-3 bg-primary-50 dark:bg-primary-900 rounded-lg">
+                    <div className="mb-4 p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
                       <div className="flex justify-between text-sm mb-1">
                         <span className="text-gray-600 dark:text-gray-300">Per User:</span>
                         <span className="font-semibold text-primary-600 dark:text-primary-400">

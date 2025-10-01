@@ -254,6 +254,9 @@ export const emailSubmissionsAPI = {
   
   getEmailSubmission: (id: string) => 
     api.get(`/email-submissions/${id}`),
+  
+  getEmailSubmissions: (group_id: string) => 
+    api.get(`/email-submissions?group_id=${group_id}`),
 }
 
 // Admin API endpoints
@@ -388,6 +391,9 @@ export const adminAPI = {
     category: string
     icon_url?: string
     how_it_works?: string
+    total_price: number
+    max_group_members: number
+    admin_fee_percentage: number
     is_active?: boolean
     is_available?: boolean
   }) => 
@@ -400,6 +406,9 @@ export const adminAPI = {
     category: string
     icon_url?: string
     how_it_works?: string
+    total_price: number
+    max_group_members: number
+    admin_fee_percentage: number
     is_active?: boolean
     is_available?: boolean
   }) => 

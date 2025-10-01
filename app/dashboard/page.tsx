@@ -275,8 +275,8 @@ export default function DashboardPage() {
                           }}
                         />
                       ) : null}
-                      <div className={`w-8 h-8 bg-primary-100 rounded flex items-center justify-center ${app.icon_url ? 'hidden' : ''}`}>
-                        <span className="text-primary-600 font-bold text-sm">
+                      <div className={`w-8 h-8 bg-primary-100 dark:bg-primary-900 rounded flex items-center justify-center ${app.icon_url ? 'hidden' : ''}`}>
+                        <span className="text-primary-600 dark:text-primary-400 font-bold text-sm">
                           {app.name.charAt(0)}
                         </span>
                       </div>
