@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Cookies from 'js-cookie'
 import { api, otpAPI } from '@/lib/api'
@@ -36,26 +36,35 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [fetching, setFetching] = useState(false)
   const router = useRouter()
+  const hasFetched = useRef(false)
 
   useEffect(() => {
     const token = Cookies.get('token')
-    if (token) {
+    if (token && !hasFetched.current) {
+      console.log('AuthContext: Fetching user profile')
+      hasFetched.current = true
       fetchUser()
-    } else {
+    } else if (!token) {
       setLoading(false)
     }
   }, [])
 
   const fetchUser = async () => {
+    if (fetching) return
+    
     try {
+      setFetching(true)
       const response = await api.get('/auth/profile')
       setUser(response.data.user)
     } catch (error) {
       console.error('Failed to fetch user:', error)
       Cookies.remove('token')
+      setUser(null)
     } finally {
       setLoading(false)
+      setFetching(false)
     }
   }
 
@@ -134,9 +143,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const refreshUser = async () => {
+    if (fetching || !Cookies.get('token')) return
+    await fetchUser()
+  }
+
   const logout = () => {
     Cookies.remove('token')
     setUser(null)
+    hasFetched.current = false
     router.push('/')
   }
 

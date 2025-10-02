@@ -59,7 +59,7 @@ export default function AdminPage() {
     if (user?.is_admin) {
       fetchAdminStats()
     }
-  }, [user])
+  }, [user?.id]) // Use user.id instead of user object to prevent re-renders
 
   const fetchAdminStats = async () => {
     try {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/DashboardLayout'
 import { Card } from '@/components/ui/Card'
@@ -114,6 +114,8 @@ export default function AdminGroupsPage() {
     user_id: '',
     role: 'member'
   })
+  const groupsFetched = useRef(false)
+  const initialLoad = useRef(true)
 
   // Redirect to homepage if not admin
   useEffect(() => {
@@ -122,16 +124,18 @@ export default function AdminGroupsPage() {
     }
   }, [user, authLoading, router])
 
-  // Fetch groups
+  // Fetch groups when user is loaded
   useEffect(() => {
-    if (user?.role === 'admin' || user?.is_admin) {
+    if ((user?.role === 'admin' || user?.is_admin) && !groupsFetched.current) {
+      groupsFetched.current = true
+      initialLoad.current = false
       fetchGroups()
     }
-  }, [user])
+  }, [user?.id]) // Use user.id instead of user object to prevent re-renders
 
-  // Refetch when filters change
+  // Refetch when filters change (but not on initial load)
   useEffect(() => {
-    if (user?.role === 'admin' || user?.is_admin) {
+    if (groupsFetched.current && !initialLoad.current) {
       fetchGroups()
     }
   }, [statusFilter, searchTerm])
@@ -194,7 +198,7 @@ export default function AdminGroupsPage() {
     try {
       // Map frontend status to backend status
       const statusMapping: { [key: string]: string } = {
-        'active': 'open',
+        'open': 'open',
         'closed': 'closed',
         'private': 'private',
         'full': 'full',
@@ -217,7 +221,7 @@ export default function AdminGroupsPage() {
       // Update stats
       setStats(prev => {
         const updated = { ...prev }
-        if (newStatus === 'active') {
+        if (newStatus === 'open') {
           updated.active += 1
           updated.pending -= 1
         } else if (newStatus === 'private') {
@@ -340,7 +344,19 @@ export default function AdminGroupsPage() {
           owner_id: groupForm.owner_id
         })
         
-        setGroups(prev => [response.data, ...prev])
+        // Add missing fields that are expected by the UI
+        const newGroup = {
+          ...response.data,
+          app_name: apps.find(app => app.id === response.data.app_id)?.name || 'Unknown App',
+          app_icon: apps.find(app => app.id === response.data.app_id)?.icon_url || '',
+          owner_name: users.find(user => user.id === response.data.owner_id)?.full_name || 'Unknown Owner',
+          owner_email: users.find(user => user.id === response.data.owner_id)?.email || 'unknown@example.com',
+          members_count: response.data.current_members || 0,
+          total_revenue: 0
+        }
+        
+        console.log('Adding new group to state:', newGroup)
+        setGroups(prev => [newGroup, ...prev])
         setStats(prev => ({
           ...prev,
           total: prev.total + 1,
@@ -382,6 +398,9 @@ export default function AdminGroupsPage() {
       }
       
       toast.success('Grup berhasil dihapus')
+      
+      // Refresh data from server to ensure consistency
+      await fetchGroups()
     } catch (error: any) {
       console.error('Error deleting group:', error)
       toast.error(error.response?.data?.error || 'Gagal menghapus grup')
@@ -534,10 +553,8 @@ export default function AdminGroupsPage() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'active':
       case 'open':
-        return <Badge variant="error" className="flex items-center space-x-1"><XCircle className="h-3 w-3" />Inactive</Badge>
-      case 'pending':
+        return <Badge variant="success" className="flex items-center space-x-1"><CheckCircle className="h-3 w-3" />Open</Badge>
       case 'private':
         return <Badge variant="warning" className="flex items-center space-x-1"><Clock className="h-3 w-3" />Private</Badge>
       case 'closed':
@@ -640,11 +657,11 @@ export default function AdminGroupsPage() {
 
           <Card className="p-6">
             <div className="flex items-center">
-              <div className="p-2 bg-red-100 dark:bg-red-900 rounded-lg">
-                <XCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
+              <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Inactive</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Open</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.active}</p>
               </div>
             </div>
@@ -708,7 +725,7 @@ export default function AdminGroupsPage() {
                 className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
                 <option value="all">Semua Status</option>
-                <option value="active">Inactive</option>
+                <option value="open">Open</option>
                 <option value="private">Private</option>
                 <option value="closed">Closed</option>
                 <option value="full">Full</option>
@@ -751,12 +768,12 @@ export default function AdminGroupsPage() {
                         {group.app_icon ? (
                           <img 
                             src={group.app_icon} 
-                            alt={group.app_name}
+                            alt={group.app_name || 'App'}
                             className="w-10 h-10 rounded"
                           />
                         ) : (
                           <span className="text-lg font-bold text-primary-600">
-                            {group.app_name.charAt(0)}
+                            {(group.app_name || 'G').charAt(0)}
                           </span>
                         )}
                       </div>
@@ -768,7 +785,7 @@ export default function AdminGroupsPage() {
                           {getStatusBadge(group.group_status)}
                         </div>
                         <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
-                          <p>App: {group.app_name}</p>
+                          <p>App: {group.app_name || 'N/A'}</p>
                           <p>Owner: {group.owner_name} ({group.owner_email})</p>
                           <p>Members: {group.members_count}/{group.max_members}</p>
                           <p>Price: {formatCurrency(group.price_per_member)}/month</p>
@@ -821,7 +838,7 @@ export default function AdminGroupsPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleStatusChange(group.id, 'active')}
+                          onClick={() => handleStatusChange(group.id, 'open')}
                           className="text-green-600 hover:text-green-700"
                         >
                           <CheckCircle className="h-4 w-4" />
@@ -913,7 +930,7 @@ export default function AdminGroupsPage() {
                     Aplikasi
                   </label>
                   <p className="text-sm text-gray-900 dark:text-white">
-                    {selectedGroup.app_name}
+                    {selectedGroup.app_name || 'N/A'}
                   </p>
                 </div>
               </div>
@@ -1055,10 +1072,12 @@ export default function AdminGroupsPage() {
                             {member.role}
                           </Badge>
                           <Badge 
-                            variant={member.user_status === 'active' ? 'success' : 'error'}
+                            variant={member.user_status === 'paid' ? 'success' : 'warning'}
                             className="text-xs"
                           >
-                            {member.user_status}
+                            {member.user_status === 'paid' ? 'Lunas' : 
+                             member.user_status === 'active' ? 'Menunggu Pembayaran' : 
+                             member.user_status}
                           </Badge>
                           {member.user_id === selectedGroup.owner_id && (
                             <Badge variant="primary" className="text-xs">
@@ -1094,7 +1113,7 @@ export default function AdminGroupsPage() {
               {selectedGroup.group_status === 'private' && (
                 <Button
                   onClick={() => {
-                    handleStatusChange(selectedGroup.id, 'active')
+                    handleStatusChange(selectedGroup.id, 'open')
                     setShowDetailModal(false)
                   }}
                   className="bg-green-600 hover:bg-green-700"

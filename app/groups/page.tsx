@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { 
@@ -58,38 +58,45 @@ export default function GroupsPage() {
   const [selectedCategory, setSelectedCategory] = useState('')
   const [categories, setCategories] = useState<string[]>([])
   const [leavingGroupId, setLeavingGroupId] = useState<string | null>(null)
+  const groupsFetched = useRef(false)
 
   useEffect(() => {
-    fetchGroups()
-    fetchCategories()
+    if (!groupsFetched.current) {
+      console.log('Groups: Fetching groups')
+      groupsFetched.current = true
+      fetchGroups()
+    }
+  }, [])
+
+  // Refetch when filters change (with debounce)
+  useEffect(() => {
+    if (groupsFetched.current) {
+      const timeoutId = setTimeout(() => {
+        fetchGroups()
+      }, 500) // Debounce search
+
+      return () => clearTimeout(timeoutId)
+    }
   }, [searchTerm, selectedCategory])
 
   const fetchGroups = async () => {
     try {
       setLoading(true)
       const response = await groupAPI.getUserGroups()
-      console.log('User groups response:', response.data)
-      setGroups(response.data.groups || [])
-    } catch (error: any) {
-      console.error('Error fetching user groups:', error)
-      console.error('Error response:', error.response?.data)
-      // Set empty groups on error
-      setGroups([])
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchCategories = async () => {
-    try {
-      // Get categories from user's groups
-      const response = await groupAPI.getUserGroups()
+      const groupsData = response.data.groups || []
+      setGroups(groupsData)
+      
+      // Extract categories from the same response to avoid duplicate API call
       const uniqueCategories = Array.from(new Set(
-        response.data.groups?.map((group: Group) => group.app?.category).filter(Boolean) || []
+        groupsData.map((group: Group) => group.app?.category).filter(Boolean) || []
       )) as string[]
       setCategories(uniqueCategories)
-    } catch (error) {
-      console.error('Error fetching categories:', error)
+    } catch (error: any) {
+      // Set empty groups on error
+      setGroups([])
+      setCategories([])
+    } finally {
+      setLoading(false)
     }
   }
 

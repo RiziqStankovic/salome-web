@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/Button'
@@ -29,11 +29,14 @@ import {
   EyeOff,
   Search,
   Plus,
-  ExternalLink
+  ExternalLink,
+  X,
+  Mail,
+  Key
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
-import { appAPI } from '@/lib/api'
+import { appAPI, otpAPI, authAPI } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 
 export default function LandingPage() {
@@ -46,6 +49,19 @@ export default function LandingPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  
+  // Forgot password states
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [forgotPasswordData, setForgotPasswordData] = useState({
+    email: '',
+    otpCode: '',
+    newPassword: '',
+    confirmPassword: ''
+  })
+  const [forgotPasswordStep, setForgotPasswordStep] = useState(1) // 1: email, 2: OTP, 3: new password
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false)
+  const [otpResendCooldown, setOtpResendCooldown] = useState(0) // in seconds
+  const [otpAttempts, setOtpAttempts] = useState(0) // track OTP attempts
   const [apps, setApps] = useState([])
   const [categories, setCategories] = useState([])
   const [loadingApps, setLoadingApps] = useState(true)
@@ -53,6 +69,8 @@ export default function LandingPage() {
   const [selectedCategory, setSelectedCategory] = useState('')
   const { user, login, register, logout } = useAuth()
   const router = useRouter()
+  const appsFetched = useRef(false)
+  const categoriesFetched = useRef(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -103,19 +121,177 @@ export default function LandingPage() {
     setShowPassword(!showPassword)
   }
 
-  // Fetch apps and categories
+  // Forgot password functions
+  const handleForgotPasswordEmail = async () => {
+    if (!forgotPasswordData.email) {
+      toast.error('Email harus diisi')
+      return
+    }
+
+    setForgotPasswordLoading(true)
+    try {
+      await otpAPI.generate(forgotPasswordData.email, 'password_reset')
+      setForgotPasswordStep(2)
+      setOtpResendCooldown(60) // 60 seconds cooldown
+      setOtpAttempts(0) // reset attempts
+      toast.success('OTP berhasil dikirim ke email Anda!')
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Gagal mengirim OTP')
+    } finally {
+      setForgotPasswordLoading(false)
+    }
+  }
+
+  const handleResendOTP = async () => {
+    if (otpResendCooldown > 0) {
+      toast.error(`Tunggu ${otpResendCooldown} detik sebelum mengirim ulang`)
+      return
+    }
+
+    setForgotPasswordLoading(true)
+    try {
+      await otpAPI.resend(forgotPasswordData.email, 'password_reset')
+      setOtpResendCooldown(60) // 60 seconds cooldown
+      toast.success('OTP berhasil dikirim ulang!')
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Gagal mengirim ulang OTP')
+    } finally {
+      setForgotPasswordLoading(false)
+    }
+  }
+
+  const handleForgotPasswordOTP = async () => {
+    if (!forgotPasswordData.otpCode) {
+      toast.error('Kode OTP harus diisi')
+      return
+    }
+
+    // Check rate limiting (6 attempts max)
+    if (otpAttempts >= 6) {
+      toast.error('Terlalu banyak percobaan. Tunggu 2 jam sebelum mencoba lagi.')
+      return
+    }
+
+    // Validate OTP format (6 digits)
+    if (!/^\d{6}$/.test(forgotPasswordData.otpCode)) {
+      toast.error('Kode OTP harus 6 digit angka')
+      return
+    }
+
+    // Skip OTP verification step, go directly to password reset
+    setForgotPasswordStep(3)
+  }
+
+  const handleForgotPasswordReset = async () => {
+    if (!forgotPasswordData.newPassword || !forgotPasswordData.confirmPassword) {
+      toast.error('Password dan konfirmasi password harus diisi')
+      return
+    }
+
+    if (forgotPasswordData.newPassword !== forgotPasswordData.confirmPassword) {
+      toast.error('Password dan konfirmasi password tidak sama')
+      return
+    }
+
+    if (forgotPasswordData.newPassword.length < 6) {
+      toast.error('Password minimal 6 karakter')
+      return
+    }
+
+    setForgotPasswordLoading(true)
+    try {
+      console.log('Sending reset password request:', {
+        email: forgotPasswordData.email,
+        otpCode: forgotPasswordData.otpCode,
+        newPassword: '***'
+      })
+      
+      const response = await authAPI.resetPassword(forgotPasswordData.email, forgotPasswordData.newPassword, forgotPasswordData.otpCode)
+      console.log('Reset password response:', response)
+      
+      toast.success('Password berhasil diubah! Silakan login dengan password baru.')
+      setShowForgotPassword(false)
+      setForgotPasswordStep(1)
+      setForgotPasswordData({
+        email: '',
+        otpCode: '',
+        newPassword: '',
+        confirmPassword: ''
+      })
+    } catch (error: any) {
+      console.log('Reset password error:', error)
+      console.log('Error response:', error.response)
+      console.log('Error data:', error.response?.data)
+      
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Gagal mengubah password'
+      console.log('Error message:', errorMessage)
+      
+      // Handle OTP errors specifically
+      if (errorMessage.includes('Invalid OTP code') || errorMessage.includes('OTP code has already been used') || errorMessage.includes('OTP code has expired')) {
+        const newAttempts = otpAttempts + 1
+        setOtpAttempts(newAttempts)
+        
+        if (newAttempts >= 6) {
+          toast.error('Terlalu banyak percobaan. Tunggu 2 jam sebelum mencoba lagi.')
+          // Set a 2-hour cooldown
+          setOtpResendCooldown(7200) // 2 hours in seconds
+          setForgotPasswordStep(2) // Go back to OTP step
+        } else {
+          toast.error(`Kode OTP salah. Sisa percobaan: ${6 - newAttempts}`)
+          setForgotPasswordStep(2) // Go back to OTP step
+        }
+      } else {
+        toast.error(errorMessage)
+      }
+    } finally {
+      setForgotPasswordLoading(false)
+    }
+  }
+
+  const resetForgotPassword = () => {
+    setShowForgotPassword(false)
+    setForgotPasswordStep(1)
+    setForgotPasswordData({
+      email: '',
+      otpCode: '',
+      newPassword: '',
+      confirmPassword: ''
+    })
+    setOtpResendCooldown(0)
+    setOtpAttempts(0)
+  }
+
+  // Countdown timer for OTP resend
   useEffect(() => {
-    fetchApps()
-    fetchCategories()
+    if (otpResendCooldown > 0) {
+      const timer = setTimeout(() => {
+        setOtpResendCooldown(prev => prev - 1)
+      }, 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [otpResendCooldown])
+
+  // Fetch apps and categories only once on mount
+  useEffect(() => {
+    if (!appsFetched.current) {
+      appsFetched.current = true
+      fetchApps()
+    }
+    if (!categoriesFetched.current) {
+      categoriesFetched.current = true
+      fetchCategories()
+    }
   }, [])
 
-  // Refetch apps when search or category changes
+  // Refetch apps when search or category changes (with debounce)
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      fetchApps()
-    }, 500) // Debounce search
+    if (appsFetched.current && (searchTerm || selectedCategory)) {
+      const timeoutId = setTimeout(() => {
+        fetchApps()
+      }, 500) // Debounce search
 
-    return () => clearTimeout(timeoutId)
+      return () => clearTimeout(timeoutId)
+    }
   }, [searchTerm, selectedCategory])
 
   const fetchApps = async () => {
@@ -147,13 +323,12 @@ export default function LandingPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    // Implement search logic here
-    fetchApps()
+    // Search will be handled by useEffect with debounce
   }
 
   const handleCategoryChange = (category: string) => {
     setSelectedCategory(category === selectedCategory ? '' : category)
-    fetchApps()
+    // Category change will be handled by useEffect with debounce
   }
 
   const features = [
@@ -460,7 +635,18 @@ export default function LandingPage() {
                   </Button>
                 </form>
 
-                <div className="mt-6 text-center">
+                <div className="mt-6 text-center space-y-2">
+                  {isLogin && (
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotPassword(true)}
+                        className="text-sm text-gray-600 hover:text-primary-600 dark:text-gray-400 dark:hover:text-primary-400"
+                      >
+                        Lupa password?
+                      </button>
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={toggleAuthMode}
@@ -855,6 +1041,179 @@ export default function LandingPage() {
           </Button>
         </div>
       </section>
+
+      {/* Forgot Password Modal */}
+      {showForgotPassword && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Lupa Password
+              </h3>
+              <button
+                onClick={resetForgotPassword}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {forgotPasswordStep === 1 && (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Masukkan email Anda untuk menerima kode OTP
+                </p>
+                <Input
+                  label="Email"
+                  type="email"
+                  placeholder="Masukkan email"
+                  value={forgotPasswordData.email}
+                  onChange={(e) => setForgotPasswordData(prev => ({ ...prev, email: e.target.value }))}
+                />
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={handleForgotPasswordEmail}
+                    disabled={forgotPasswordLoading}
+                    loading={forgotPasswordLoading}
+                    className="flex-1"
+                  >
+                    <Mail className="h-4 w-4 mr-2" />
+                    Kirim OTP
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={resetForgotPassword}
+                  >
+                    Batal
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {forgotPasswordStep === 2 && (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Masukkan kode OTP yang dikirim ke {forgotPasswordData.email}
+                </p>
+                
+                {/* Rate limiting warning */}
+                {otpAttempts > 0 && (
+                  <div className={`p-3 rounded-lg text-sm ${
+                    otpAttempts >= 6 
+                      ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+                      : 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-300'
+                  }`}>
+                    {otpAttempts >= 6 ? (
+                      <div className="flex items-center space-x-2">
+                        <AlertCircle className="h-4 w-4" />
+                        <span>Terlalu banyak percobaan. Tunggu 2 jam sebelum mencoba lagi.</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-2">
+                        <AlertCircle className="h-4 w-4" />
+                        <span>Sisa percobaan: {6 - otpAttempts}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <Input
+                  label="Kode OTP"
+                  placeholder="Masukkan 6 digit kode OTP"
+                  value={forgotPasswordData.otpCode}
+                  onChange={(e) => setForgotPasswordData(prev => ({ ...prev, otpCode: e.target.value }))}
+                  maxLength={6}
+                  disabled={otpAttempts >= 6}
+                />
+                
+                {/* Resend OTP button */}
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={handleResendOTP}
+                    disabled={otpResendCooldown > 0 || forgotPasswordLoading || otpAttempts >= 6}
+                    className={`text-sm ${
+                      otpResendCooldown > 0 || otpAttempts >= 6
+                        ? 'text-gray-400 cursor-not-allowed'
+                        : 'text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300'
+                    }`}
+                  >
+                    {otpResendCooldown > 0 
+                      ? `Kirim ulang dalam ${otpResendCooldown}s`
+                      : 'Kirim ulang OTP'
+                    }
+                  </button>
+                </div>
+
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={handleForgotPasswordOTP}
+                    disabled={forgotPasswordLoading || otpAttempts >= 6}
+                    loading={forgotPasswordLoading}
+                    className="flex-1"
+                  >
+                    Lanjutkan
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setForgotPasswordStep(1)}
+                  >
+                    Kembali
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {forgotPasswordStep === 3 && (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Masukkan password baru Anda
+                </p>
+                <Input
+                  label="Password Baru"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Masukkan password baru"
+                  value={forgotPasswordData.newPassword}
+                  onChange={(e) => setForgotPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
+                />
+                <Input
+                  label="Konfirmasi Password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Konfirmasi password baru"
+                  value={forgotPasswordData.confirmPassword}
+                  onChange={(e) => setForgotPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={togglePasswordVisibility}
+                  className="w-full"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+                  {showPassword ? 'Sembunyikan' : 'Tampilkan'} Password
+                </Button>
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={handleForgotPasswordReset}
+                    disabled={forgotPasswordLoading}
+                    loading={forgotPasswordLoading}
+                    className="flex-1"
+                  >
+                    <Key className="h-4 w-4 mr-2" />
+                    Ubah Password
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setForgotPasswordStep(2)}
+                  >
+                    Kembali
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="bg-gray-900 dark:bg-black text-white py-12">

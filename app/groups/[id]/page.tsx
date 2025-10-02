@@ -156,53 +156,30 @@ export default function GroupDetailPage() {
     description: ''
   })
   const [paidMembersCount, setPaidMembersCount] = useState(0)
+  const groupDetailsFetched = useRef(false)
+  const credentialsFetched = useRef(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (groupId) {
-      console.log('🔄 Initial page load - fetching all data for group:', groupId)
+    if (groupId && !groupDetailsFetched.current) {
+      groupDetailsFetched.current = true
       fetchGroupDetails()
       fetchMessages()
       fetchMembers()
-      
-      // Also try to check email status immediately if we have the data
-      setTimeout(() => {
-        if (group?.id && group?.app?.id && user) {
-          console.log('⏰ Timeout fallback: Checking email submission status')
-          checkEmailSubmissionStatus()
-        }
-      }, 2000) // Wait 2 seconds for data to load
     }
   }, [groupId])
 
-  // Fetch account credentials when group data is loaded
+  // Fetch account credentials and check email status when group data is loaded
   useEffect(() => {
-    if (group?.app?.id && user) {
+    if (group?.app?.id && user && !credentialsFetched.current) {
+      credentialsFetched.current = true
       fetchAccountCredentials()
       fetchAllAccountCredentials()
+      // checkEmailSubmissionStatus will be called after credentials are loaded
     }
   }, [group?.app?.id, user])
-
-  // Check email submission status after group and user data are loaded
-  useEffect(() => {
-    console.log('🔍 useEffect dependencies check:', {
-      groupId: group?.id,
-      appId: group?.app?.id,
-      userId: user?.id,
-      hasGroup: !!group,
-      hasApp: !!group?.app,
-      hasUser: !!user
-    })
-    
-    if (group?.id && group?.app?.id && user) {
-      console.log('🚀 useEffect triggered: Checking email submission status on page load')
-      checkEmailSubmissionStatus()
-    } else {
-      console.log('❌ useEffect not triggered: Missing dependencies')
-    }
-  }, [group?.id, group?.app?.id, user])
 
   useEffect(() => {
     scrollToBottom()
@@ -214,7 +191,6 @@ export default function GroupDetailPage() {
       member.user_status === 'paid'
     ).length
     setPaidMembersCount(paidCount)
-    console.log('💰 Paid members count updated:', paidCount, 'out of', members.length)
   }, [members])
 
   // Auto scroll to bottom when component mounts
@@ -255,25 +231,11 @@ export default function GroupDetailPage() {
   const fetchGroupDetails = async () => {
     try {
       setLoading(true)
-      console.log('Fetching group details for ID:', groupId)
       const response = await groupAPI.getGroupDetails(groupId)
-      console.log('Group API response:', response)
-      console.log('Group data:', response.data)
-      console.log('Group data structure:', JSON.stringify(response.data, null, 2))
       
       // Backend returns data in format: {"group": groupResponse}
       const groupData = response.data.group
-      console.log('Final group data:', groupData)
-      console.log('Group app data:', groupData?.app)
       setGroup(groupData)
-      
-      // Check email submission status after group data is loaded
-      if (groupData?.app?.id && user) {
-        console.log('📋 fetchGroupDetails: Checking email submission status after group data loaded')
-        checkEmailSubmissionStatus()
-      } else {
-        console.log('❌ fetchGroupDetails: Cannot check email status - missing app or user data')
-      }
     } catch (error: any) {
       console.error('Error fetching group details:', error)
       console.error('Error response:', error.response)
@@ -306,7 +268,10 @@ export default function GroupDetailPage() {
       
       // Check email submission status after account credentials are loaded
       if (user) {
-        checkEmailSubmissionStatus()
+        // Add small delay to prevent race conditions
+        setTimeout(() => {
+          checkEmailSubmissionStatus()
+        }, 100)
       }
     } catch (error: any) {
       console.error('Error fetching account credentials:', error)
@@ -320,24 +285,14 @@ export default function GroupDetailPage() {
 
   const checkEmailSubmissionStatus = async () => {
     if (!group?.id || !group?.app?.id) {
-      console.log('❌ Cannot check email submission status: missing group or app data', {
-        groupId: group?.id,
-        appId: group?.app?.id,
-        hasGroup: !!group,
-        hasApp: !!group?.app
-      })
       return
     }
     
     try {
-      console.log('🔍 Checking email submission status for group:', group.id, 'app:', group.app.id)
-      console.log('📡 Calling API: GET /api/v1/email-submissions?group_id=' + group.id)
       const response = await emailSubmissionsAPI.getEmailSubmissions(group.id)
-      console.log('📨 Email submissions API response:', response.data)
       
       // Extract submissions from response.data.data (API returns {data: [...], success: true})
       const submissions = response.data.data || []
-      console.log('📋 Extracted submissions:', submissions)
       
       // Check if there's an approved submission for this group
       const approvedSubmission = submissions.find((sub: any) => 
@@ -347,11 +302,9 @@ export default function GroupDetailPage() {
       )
       
       if (approvedSubmission) {
-        console.log('✅ Found approved submission:', approvedSubmission)
         setEmailSubmissionStatus('approved')
         setApprovedEmail(approvedSubmission.email)
         setRejectedEmail(null)
-        console.log('✅ Status set to: approved')
       } else {
         // Check if there's a rejected submission
         const rejectedSubmission = submissions.find((sub: any) => 
@@ -361,11 +314,9 @@ export default function GroupDetailPage() {
         )
         
         if (rejectedSubmission) {
-          console.log('❌ Found rejected submission:', rejectedSubmission)
           setEmailSubmissionStatus('rejected')
           setRejectedEmail(rejectedSubmission.email)
           setApprovedEmail(null)
-          console.log('✅ Status set to: rejected')
         } else {
           // Check if there's a pending submission
           const pendingSubmission = submissions.find((sub: any) => 
@@ -375,17 +326,13 @@ export default function GroupDetailPage() {
           )
           
           if (pendingSubmission) {
-            console.log('⏳ Found pending submission:', pendingSubmission)
             setEmailSubmissionStatus('submitted')
             setApprovedEmail(null)
             setRejectedEmail(null)
-            console.log('✅ Status set to: submitted (pending)')
           } else {
-            console.log('❓ No email submission found for this group')
             setEmailSubmissionStatus(null)
             setApprovedEmail(null)
             setRejectedEmail(null)
-            console.log('✅ Status set to: null (no submission)')
           }
         }
       }
@@ -416,11 +363,6 @@ export default function GroupDetailPage() {
         return dateA - dateB
       })
       setMessages(sortedMessages)
-      
-      // Check email submission status after messages are loaded
-      if (group?.app?.id && user) {
-        checkEmailSubmissionStatus()
-      }
     } catch (error: any) {
       console.error('Error fetching messages:', error)
       if (error.response?.status === 403) {
@@ -438,11 +380,6 @@ export default function GroupDetailPage() {
       setLoadingMembers(true)
       const response = await groupAPI.getGroupMembers(groupId)
       setMembers(response.data.members || [])
-      
-      // Check email submission status after members are loaded
-      if (group?.app?.id && user) {
-        checkEmailSubmissionStatus()
-      }
     } catch (error: any) {
       console.error('Error fetching members:', error)
       if (error.response?.status === 403) {
@@ -590,7 +527,7 @@ export default function GroupDetailPage() {
       // Re-check email submission status to ensure consistency
       setTimeout(() => {
         checkEmailSubmissionStatus()
-      }, 1000)
+      }, 2000)
     } catch (error: any) {
       console.error('Error submitting email:', error)
       if (error.response?.data?.message) {
@@ -1242,7 +1179,7 @@ export default function GroupDetailPage() {
                                   <span className="text-orange-600 dark:text-orange-400 ml-1">(Profil)</span>
                                 )}
                                 {emailSubmissionStatus === 'approved' && approvedEmail === getCurrentEmail() && (
-                                  <span className="text-green-600 dark:text-green-400 ml-1 font-semibold">✓ Disetujui</span>
+                                  <span className="text-green-600 dark:text-green-400 ml-1 font-semibold"></span>
                                 )}
                               </span>
                             </div>
@@ -1265,6 +1202,20 @@ export default function GroupDetailPage() {
                               <div className="flex items-center space-x-1">
                                 <CheckCircle className="h-3 w-3 text-green-600" />
                                 <span className="font-medium">Email yang disetujui: {approvedEmail}</span>
+                              </div>
+                              <div className="mt-1 text-green-700 dark:text-green-300">
+                                💡 Ingin mengganti email? Klik "Ajukan Email Baru" di atas untuk mengajukan email yang berbeda.
+                              </div>
+                            </div>
+                          )}
+                          {emailSubmissionStatus === 'submitted' && approvedEmail && (
+                            <div className="mt-2 p-2 bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 rounded text-xs text-blue-800 dark:text-blue-200">
+                              <div className="flex items-center space-x-1 mb-1">
+                                <Clock className="h-3 w-3 text-blue-600" />
+                                <span className="font-medium">Email baru sedang diajukan: {getCurrentEmail()}</span>
+                              </div>
+                              <div className="text-blue-700 dark:text-blue-300">
+                                Email sebelumnya yang disetujui: <span className="font-medium">{approvedEmail}</span>
                               </div>
                             </div>
                           )}
@@ -1330,6 +1281,16 @@ export default function GroupDetailPage() {
                                 {submittingEmail ? 'Mengajukan...' : 'Ajukan Email Baru'}
                               </Button>
                             )}
+                            {emailSubmissionStatus === 'approved' && (
+                              <Button
+                                size="sm"
+                                onClick={submitEmailForGroup}
+                                disabled={submittingEmail}
+                                className="text-xs px-2 py-1 h-6 bg-blue-600 hover:bg-blue-700 text-white"
+                              >
+                                {submittingEmail ? 'Mengajukan...' : 'Ajukan Email Baru'}
+                              </Button>
+                            )}
                           </div>
                           
                           {/* Status Email Submission - Tampilan Utama */}
@@ -1368,7 +1329,14 @@ export default function GroupDetailPage() {
                               </div>
                               <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
                                 {emailSubmissionStatus === 'submitted' && (
-                                  <>Email berhasil diajukan! Admin akan meninjau pengajuan Anda.</>
+                                  <>
+                                    Email <strong className="text-yellow-700 dark:text-yellow-300">{getCurrentEmail()}</strong> berhasil diajukan! Admin akan meninjau pengajuan Anda.
+                                    {approvedEmail && (
+                                      <div className="mt-1 text-gray-500 dark:text-gray-400">
+                                        Email sebelumnya yang disetujui: <strong>{approvedEmail}</strong>
+                                      </div>
+                                    )}
+                                  </>
                                 )}
                                 {emailSubmissionStatus === 'approved' && approvedEmail && (
                                   <>Email <strong className="text-green-700 dark:text-green-300">{approvedEmail}</strong> telah disetujui! Anda dapat bergabung ke grup patungan.</>
@@ -1433,12 +1401,12 @@ export default function GroupDetailPage() {
                             <Badge 
                               variant={
                                 member.user_status === 'paid' ? 'success' : 
-                                member.user_status === 'active' ? 'primary' : 
+                                member.user_status === 'active' ? 'warning' : 
                                 'warning'
                               }
                             >
                               {member.user_status === 'paid' ? 'Lunas' : 
-                               member.user_status === 'active' ? 'Active' : 
+                               member.user_status === 'active' ? 'Menunggu Pembayaran' : 
                                'Pending'}
                             </Badge>
                           </div>

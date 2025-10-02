@@ -24,7 +24,9 @@ export default function VerifyEmailPage() {
   const [resendLoading, setResendLoading] = useState(false)
   const [countdown, setCountdown] = useState(0)
   const [verified, setVerified] = useState(false)
+  const [otpAttempts, setOtpAttempts] = useState(0)
   const otpInputRef = useRef<OTPInputRef>(null)
+  const isVerifying = useRef(false)
 
   useEffect(() => {
     if (!email) {
@@ -49,8 +51,8 @@ export default function VerifyEmailPage() {
 
   const handleOTPComplete = async (otpCode: string) => {
     setOtp(otpCode)
-    // Auto-submit when OTP is complete
-    if (otpCode.length === 6) {
+    // Auto-submit when OTP is complete, but only if not already verifying
+    if (otpCode.length === 6 && !isVerifying.current) {
       await handleVerify()
     }
   }
@@ -65,12 +67,22 @@ export default function VerifyEmailPage() {
       return
     }
 
+    // Check rate limiting (6 attempts max)
+    if (otpAttempts >= 6) {
+      toast.error('Terlalu banyak percobaan. Tunggu 2 jam sebelum mencoba lagi.')
+      return
+    }
+
+    if (loading || isVerifying.current) return
+
+    isVerifying.current = true
     setLoading(true)
     try {
       const response = await otpAPI.verify(email!, otp, purpose as any)
       
       if (response.data.valid) {
         setVerified(true)
+        setOtpAttempts(0) // reset attempts on success
         toast.success('Email berhasil diverifikasi!')
         
         // Refresh user data to update status
@@ -79,19 +91,41 @@ export default function VerifyEmailPage() {
         // Redirect immediately to dashboard
         router.push('/dashboard')
       } else {
-        toast.error(response.data.message || 'Kode OTP tidak valid')
+        const newAttempts = otpAttempts + 1
+        setOtpAttempts(newAttempts)
+        
+        if (newAttempts >= 6) {
+          toast.error('Terlalu banyak percobaan. Tunggu 2 jam sebelum mencoba lagi.')
+          // Set a 2-hour cooldown
+          setCountdown(7200) // 2 hours in seconds
+        } else {
+          toast.error(`Kode OTP salah. Sisa percobaan: ${6 - newAttempts}`)
+        }
+        
         // Clear OTP input on error
         otpInputRef.current?.clearOTP()
         setOtp('')
       }
     } catch (error: any) {
       console.error('Error verifying OTP:', error)
-      toast.error(error.response?.data?.error || 'Gagal memverifikasi OTP')
+      
+      const newAttempts = otpAttempts + 1
+      setOtpAttempts(newAttempts)
+      
+      if (newAttempts >= 6) {
+        toast.error('Terlalu banyak percobaan. Tunggu 2 jam sebelum mencoba lagi.')
+        // Set a 2-hour cooldown
+        setCountdown(7200) // 2 hours in seconds
+      } else {
+        toast.error(`Gagal memverifikasi OTP. Sisa percobaan: ${6 - newAttempts}`)
+      }
+      
       // Clear OTP input on error
       otpInputRef.current?.clearOTP()
       setOtp('')
     } finally {
       setLoading(false)
+      isVerifying.current = false
     }
   }
 
@@ -183,15 +217,36 @@ export default function VerifyEmailPage() {
               length={6}
               onComplete={handleOTPComplete}
               onChange={handleOTPChange}
-              disabled={loading}
+              disabled={loading || otpAttempts >= 6}
               className="mb-4"
             />
+            
+            {/* Rate limiting warning */}
+            {otpAttempts > 0 && (
+              <div className={`p-3 rounded-lg text-sm mb-4 ${
+                otpAttempts >= 6 
+                  ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+                  : 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-300'
+              }`}>
+                {otpAttempts >= 6 ? (
+                  <div className="flex items-center space-x-2">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>Terlalu banyak percobaan. Tunggu 2 jam sebelum mencoba lagi.</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-2">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>Sisa percobaan: {6 - otpAttempts}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Verify Button */}
           <Button
             onClick={handleVerify}
-            disabled={otp.length !== 6 || loading}
+            disabled={otp.length !== 6 || loading || otpAttempts >= 6}
             loading={loading}
             className="w-full mb-4"
           >

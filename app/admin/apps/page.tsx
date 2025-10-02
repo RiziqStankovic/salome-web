@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/DashboardLayout'
 import { Card } from '@/components/ui/Card'
@@ -17,8 +17,6 @@ import {
   Plus,
   CheckCircle,
   XCircle,
-  Globe,
-  Lock,
   Calendar,
   Users,
   DollarSign,
@@ -37,7 +35,6 @@ interface App {
   icon_url?: string
   category: string
   is_active: boolean
-  is_available: boolean
   how_it_works?: string
   total_price: number
   max_group_members: number
@@ -53,8 +50,6 @@ interface AppStats {
   total: number
   active: number
   inactive: number
-  available: number
-  unavailable: number
   total_revenue: number
   avg_price: number
 }
@@ -67,8 +62,6 @@ export default function AdminAppsPage() {
     total: 0,
     active: 0,
     inactive: 0,
-    available: 0,
-    unavailable: 0,
     total_revenue: 0,
     avg_price: 0
   })
@@ -85,13 +78,13 @@ export default function AdminAppsPage() {
     category: '',
     icon_url: '',
     how_it_works: '',
-    total_price: 0,
-    max_group_members: 5,
-    admin_fee_percentage: 10,
+    total_price: '',
+    max_group_members: '',
+    admin_fee_percentage: '',
     is_active: true,
-    is_available: true
   })
   const [saving, setSaving] = useState(false)
+  const appsFetched = useRef(false)
 
   // Redirect to homepage if not admin
   useEffect(() => {
@@ -100,19 +93,15 @@ export default function AdminAppsPage() {
     }
   }, [user, authLoading, router])
 
-  // Fetch apps
+  // Fetch apps only once when user is loaded
   useEffect(() => {
-    if (user?.role === 'admin' || user?.is_admin) {
+    if ((user?.role === 'admin' || user?.is_admin) && !appsFetched.current) {
+      appsFetched.current = true
       fetchApps()
     }
-  }, [user])
+  }, [user?.id]) // Use user.id instead of user object to prevent re-renders
 
-  // Refetch when filters change
-  useEffect(() => {
-    if (user?.role === 'admin' || user?.is_admin) {
-      fetchApps()
-    }
-  }, [statusFilter, searchTerm])
+  // Note: We don't refetch when filters change, we filter client-side
 
   const fetchApps = async () => {
     try {
@@ -129,8 +118,6 @@ export default function AdminAppsPage() {
         total: 0,
         active: 0,
         inactive: 0,
-        available: 0,
-        unavailable: 0,
         total_revenue: 0,
         avg_price: 0
       })
@@ -142,8 +129,6 @@ export default function AdminAppsPage() {
         total: 0,
         active: 0,
         inactive: 0,
-        available: 0,
-        unavailable: 0,
         total_revenue: 0,
         avg_price: 0
       })
@@ -153,21 +138,30 @@ export default function AdminAppsPage() {
   }
 
   const filteredApps = (apps || []).filter(app => {
+    // Skip apps that don't have required fields
+    if (!app || !app.name) {
+      console.log('Filtering out app without name:', app)
+      return false
+    }
+    
     const matchesSearch = 
       app.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.category.toLowerCase().includes(searchTerm.toLowerCase())
+      (app.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (app.category || '').toLowerCase().includes(searchTerm.toLowerCase())
     
     const matchesStatus = statusFilter === 'all' || 
       (statusFilter === 'active' && app.is_active) ||
-      (statusFilter === 'inactive' && !app.is_active) ||
-      (statusFilter === 'available' && app.is_available) ||
-      (statusFilter === 'unavailable' && !app.is_available)
+      (statusFilter === 'inactive' && !app.is_active)
     
-    return matchesSearch && matchesStatus
+    const shouldInclude = matchesSearch && matchesStatus
+    if (!shouldInclude) {
+      console.log('Filtering out app:', app.name, 'matchesSearch:', matchesSearch, 'matchesStatus:', matchesStatus)
+    }
+    
+    return shouldInclude
   })
 
-  const handleStatusChange = async (appId: string, field: 'is_active' | 'is_available', value: boolean) => {
+  const handleStatusChange = async (appId: string, field: 'is_active', value: boolean) => {
     try {
       await adminAPI.updateAppStatus({
         app_id: appId,
@@ -192,14 +186,6 @@ export default function AdminAppsPage() {
             updated.active -= 1
             updated.inactive += 1
           }
-        } else if (field === 'is_available') {
-          if (value) {
-            updated.available += 1
-            updated.unavailable -= 1
-          } else {
-            updated.available -= 1
-            updated.unavailable += 1
-          }
         }
         return updated
       })
@@ -219,29 +205,27 @@ export default function AdminAppsPage() {
       category: '',
       icon_url: '',
       how_it_works: '',
-      total_price: 0,
-      max_group_members: 5,
-      admin_fee_percentage: 10,
+      total_price: '',
+      max_group_members: '',
+      admin_fee_percentage: '',
       is_active: true,
-      is_available: true
     })
     setShowAppModal(true)
   }
 
   const handleEditApp = (app: App) => {
     setEditingApp(app)
-    setAppForm({
-      name: app.name,
-      description: app.description,
-      category: app.category,
-      icon_url: app.icon_url || '',
-      how_it_works: app.how_it_works || '',
-      total_price: app.total_price || 0,
-      max_group_members: app.max_group_members || 5,
-      admin_fee_percentage: app.admin_fee_percentage || 10,
-      is_active: app.is_active,
-      is_available: app.is_available
-    })
+      setAppForm({
+        name: app.name,
+        description: app.description,
+        category: app.category,
+        icon_url: app.icon_url || '',
+        how_it_works: app.how_it_works || '',
+        total_price: app.total_price?.toString() || '',
+        max_group_members: app.max_group_members?.toString() || '',
+        admin_fee_percentage: app.admin_fee_percentage?.toString() || '',
+        is_active: app.is_active
+      })
     setShowAppModal(true)
   }
 
@@ -251,17 +235,21 @@ export default function AdminAppsPage() {
       return
     }
 
-    if (appForm.total_price <= 0) {
+    const totalPrice = parseInt(appForm.total_price) || 0
+    const maxMembers = parseInt(appForm.max_group_members) || 0
+    const adminFee = parseInt(appForm.admin_fee_percentage) || 0
+
+    if (totalPrice <= 0) {
       toast.error('Total harga harus lebih dari 0')
       return
     }
 
-    if (appForm.max_group_members <= 0) {
+    if (maxMembers <= 0) {
       toast.error('Max anggota grup harus lebih dari 0')
       return
     }
 
-    if (appForm.admin_fee_percentage < 0 || appForm.admin_fee_percentage > 100) {
+    if (adminFee < 0 || adminFee > 100) {
       toast.error('Persentase admin fee harus antara 0-100')
       return
     }
@@ -278,20 +266,33 @@ export default function AdminAppsPage() {
           category: appForm.category,
           icon_url: appForm.icon_url,
           how_it_works: appForm.how_it_works,
-          total_price: appForm.total_price,
-          max_group_members: appForm.max_group_members,
-          admin_fee_percentage: appForm.admin_fee_percentage,
-          is_active: appForm.is_active,
-          is_available: appForm.is_available
+          total_price: totalPrice,
+          max_group_members: maxMembers,
+          admin_fee_percentage: adminFee,
+          is_active: appForm.is_active
         })
         
         setApps(prev => prev.map(a => 
           a.id === editingApp.id 
-            ? { ...a, ...appForm }
+            ? { 
+                ...a, 
+                name: appForm.name,
+                description: appForm.description,
+                category: appForm.category,
+                icon_url: appForm.icon_url,
+                how_it_works: appForm.how_it_works,
+                total_price: totalPrice,
+                max_group_members: maxMembers,
+                admin_fee_percentage: adminFee,
+                is_active: appForm.is_active
+              }
             : a
         ))
         
         toast.success('App berhasil diupdate')
+        
+        // Refresh data from server to ensure consistency
+        await fetchApps()
       } else {
         // Create new app
         const response = await adminAPI.createApp({
@@ -300,24 +301,40 @@ export default function AdminAppsPage() {
           category: appForm.category,
           icon_url: appForm.icon_url,
           how_it_works: appForm.how_it_works,
-          total_price: appForm.total_price,
-          max_group_members: appForm.max_group_members,
-          admin_fee_percentage: appForm.admin_fee_percentage,
-          is_active: appForm.is_active,
-          is_available: appForm.is_available
+          total_price: totalPrice,
+          max_group_members: maxMembers,
+          admin_fee_percentage: adminFee,
+          is_active: appForm.is_active
         })
         
-        setApps(prev => [response.data, ...prev])
+        console.log('Create app response:', response.data)
+        console.log('Current apps before adding:', apps.length)
+        
+        // Backend returns {data: app}, so we need response.data
+        if (response.data) {
+          console.log('Adding new app to state:', response.data)
+          setApps(prev => {
+            console.log('Previous apps count:', prev.length)
+            const newApps = [response.data, ...prev]
+            console.log('New apps count:', newApps.length)
+            return newApps
+          })
+        } else {
+          console.error('No data in response:', response)
+          toast.error('Gagal membuat app - data tidak valid')
+          return
+        }
         setStats(prev => ({
           ...prev,
           total: prev.total + 1,
           active: prev.active + (appForm.is_active ? 1 : 0),
           inactive: prev.inactive + (appForm.is_active ? 0 : 1),
-          available: prev.available + (appForm.is_available ? 1 : 0),
-          unavailable: prev.unavailable + (appForm.is_available ? 0 : 1)
         }))
         
         toast.success('App berhasil dibuat')
+        
+        // Refresh data from server to ensure consistency
+        await fetchApps()
       }
       
       setShowAppModal(false)
@@ -347,12 +364,13 @@ export default function AdminAppsPage() {
           total: prev.total - 1,
           active: prev.active - (appToDelete.is_active ? 1 : 0),
           inactive: prev.inactive - (appToDelete.is_active ? 0 : 1),
-          available: prev.available - (appToDelete.is_available ? 1 : 0),
-          unavailable: prev.unavailable - (appToDelete.is_available ? 0 : 1)
         }))
       }
       
       toast.success('App berhasil dihapus')
+      
+      // Refresh data from server to ensure consistency
+      await fetchApps()
     } catch (error) {
       console.error('Error deleting app:', error)
       toast.error('Gagal menghapus app')
@@ -373,19 +391,6 @@ export default function AdminAppsPage() {
     )
   }
 
-  const getAvailabilityBadge = (isAvailable: boolean) => {
-    return isAvailable ? (
-      <Badge variant="primary" className="flex items-center space-x-1">
-        <Globe className="h-3 w-3" />
-        Available
-      </Badge>
-    ) : (
-      <Badge variant="gray" className="flex items-center space-x-1">
-        <Lock className="h-3 w-3" />
-        Unavailable
-      </Badge>
-    )
-  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('id-ID', {
@@ -460,7 +465,7 @@ export default function AdminAppsPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card className="p-6">
             <div className="flex items-center">
               <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
@@ -485,17 +490,6 @@ export default function AdminAppsPage() {
             </div>
           </Card>
 
-          <Card className="p-6">
-            <div className="flex items-center">
-              <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
-                <Globe className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Available</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.available}</p>
-              </div>
-            </div>
-          </Card>
 
           <Card className="p-6">
             <div className="flex items-center">
@@ -533,8 +527,6 @@ export default function AdminAppsPage() {
                 <option value="all">Semua Status</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
-                <option value="available">Available</option>
-                <option value="unavailable">Unavailable</option>
               </select>
             </div>
           </div>
@@ -578,7 +570,7 @@ export default function AdminAppsPage() {
                           />
                         ) : (
                           <span className="text-lg font-bold text-primary-600">
-                            {app.name.charAt(0)}
+                            {(app.name || 'A').charAt(0)}
                           </span>
                         )}
                       </div>
@@ -588,14 +580,13 @@ export default function AdminAppsPage() {
                             {app.name}
                           </h3>
                           {getStatusBadge(app.is_active)}
-                          {getAvailabilityBadge(app.is_available)}
                         </div>
                         <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
-                          <p>Category: {app.category}</p>
-                          <p>{app.description}</p>
-                          <p>Groups: {app.groups_count} | Revenue: {formatCurrency(app.total_revenue)}</p>
-                          <p>Total Price: {formatCurrency(app.total_price)} | Max Members: {app.max_group_members} | Admin Fee: {app.admin_fee_percentage}%</p>
-                          <p>Avg Price: {formatCurrency(app.avg_price)} | Updated: {formatDate(app.updated_at)}</p>
+                          <p>Category: {app.category || 'N/A'}</p>
+                          <p>{app.description || 'No description'}</p>
+                          <p>Groups: {app.groups_count || 0} | Revenue: {formatCurrency(app.total_revenue || 0)}</p>
+                          <p>Total Price: {formatCurrency(app.total_price || 0)} | Max Members: {app.max_group_members || 0} | Admin Fee: {app.admin_fee_percentage || 0}%</p>
+                          <p>Avg Price: {formatCurrency(app.avg_price || 0)} | Updated: {formatDate(app.updated_at || new Date().toISOString())}</p>
                         </div>
                       </div>
                     </div>
@@ -679,19 +670,11 @@ export default function AdminAppsPage() {
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Status
-                  </label>
-                  {getStatusBadge(selectedApp.is_active)}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Availability
-                  </label>
-                  {getAvailabilityBadge(selectedApp.is_available)}
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Status
+                </label>
+                {getStatusBadge(selectedApp.is_active)}
               </div>
               
               <div>
@@ -898,7 +881,7 @@ export default function AdminAppsPage() {
                   <Input
                     type="number"
                     value={appForm.total_price}
-                    onChange={(e) => setAppForm(prev => ({ ...prev, total_price: parseInt(e.target.value) || 0 }))}
+                    onChange={(e) => setAppForm(prev => ({ ...prev, total_price: e.target.value }))}
                     placeholder="Masukkan total harga"
                     min="0"
                   />
@@ -910,7 +893,7 @@ export default function AdminAppsPage() {
                   <Input
                     type="number"
                     value={appForm.max_group_members}
-                    onChange={(e) => setAppForm(prev => ({ ...prev, max_group_members: parseInt(e.target.value) || 1 }))}
+                    onChange={(e) => setAppForm(prev => ({ ...prev, max_group_members: e.target.value }))}
                     placeholder="Masukkan max anggota"
                     min="1"
                   />
@@ -922,7 +905,7 @@ export default function AdminAppsPage() {
                   <Input
                     type="number"
                     value={appForm.admin_fee_percentage}
-                    onChange={(e) => setAppForm(prev => ({ ...prev, admin_fee_percentage: parseInt(e.target.value) || 0 }))}
+                    onChange={(e) => setAppForm(prev => ({ ...prev, admin_fee_percentage: e.target.value }))}
                     placeholder="Masukkan persentase admin fee"
                     min="0"
                     max="100"
@@ -930,31 +913,17 @@ export default function AdminAppsPage() {
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="is_active"
-                    checked={appForm.is_active}
-                    onChange={(e) => setAppForm(prev => ({ ...prev, is_active: e.target.checked }))}
-                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                  />
-                  <label htmlFor="is_active" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Active
-                  </label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="is_available"
-                    checked={appForm.is_available}
-                    onChange={(e) => setAppForm(prev => ({ ...prev, is_available: e.target.checked }))}
-                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                  />
-                  <label htmlFor="is_available" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Available
-                  </label>
-                </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="is_active"
+                  checked={appForm.is_active}
+                  onChange={(e) => setAppForm(prev => ({ ...prev, is_active: e.target.checked }))}
+                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <label htmlFor="is_active" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Active
+                </label>
               </div>
             </div>
             

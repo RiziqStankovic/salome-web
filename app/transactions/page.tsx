@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { 
@@ -55,6 +55,7 @@ export default function TransactionsPage() {
     topUpAmount: 0,
     spentAmount: 0
   })
+  const transactionsFetched = useRef(false)
 
   const transactionTypes = [
     { value: '', label: 'All' },
@@ -72,10 +73,23 @@ export default function TransactionsPage() {
   }, [user, authLoading, router])
 
   useEffect(() => {
-    if (user) {
+    if (user && !transactionsFetched.current) {
+      console.log('Transactions: Fetching transactions for user:', user.id)
+      transactionsFetched.current = true
       fetchTransactions()
     }
-  }, [page, searchTerm, selectedType, user])
+  }, [user?.id]) // Use user.id instead of user object to prevent re-renders
+
+  // Refetch when filters change (with debounce)
+  useEffect(() => {
+    if (transactionsFetched.current) {
+      const timeoutId = setTimeout(() => {
+        fetchTransactions()
+      }, 500) // Debounce search
+
+      return () => clearTimeout(timeoutId)
+    }
+  }, [page, searchTerm, selectedType])
 
   const fetchTransactions = async () => {
     try {

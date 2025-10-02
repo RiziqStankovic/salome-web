@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/DashboardLayout'
 import { Card } from '@/components/ui/Card'
@@ -57,10 +57,34 @@ export default function BrowsePage() {
     total: 0,
     totalPages: 0
   })
+  const categoriesFetched = useRef(false)
+  const appsFetched = useRef(false)
 
+  // Fetch categories only once on mount
   useEffect(() => {
-    fetchApps()
-    fetchCategories()
+    if (!categoriesFetched.current) {
+      categoriesFetched.current = true
+      fetchCategories()
+    }
+  }, [])
+
+  // Fetch apps only once on mount
+  useEffect(() => {
+    if (!appsFetched.current) {
+      appsFetched.current = true
+      fetchApps()
+    }
+  }, [])
+
+  // Refetch apps when filters change (with debounce)
+  useEffect(() => {
+    if (appsFetched.current) {
+      const timeoutId = setTimeout(() => {
+        fetchApps()
+      }, 500) // Debounce search
+
+      return () => clearTimeout(timeoutId)
+    }
   }, [pagination.page, selectedCategory, searchTerm, showPopularOnly])
 
   const fetchApps = async () => {
@@ -139,7 +163,7 @@ export default function BrowsePage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 dark:border-primary-400"></div>
         </div>
       </DashboardLayout>
     )
@@ -151,8 +175,8 @@ export default function BrowsePage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Browse Apps</h1>
-            <p className="text-gray-600 mt-1">Temukan aplikasi untuk patungan bersama</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Browse Apps</h1>
+            <p className="text-gray-600 dark:text-gray-300 mt-1">Temukan aplikasi untuk patungan bersama</p>
           </div>
         </div>
 
@@ -163,7 +187,7 @@ export default function BrowsePage() {
               <div className="flex-1">
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="h-5 w-5 text-gray-400" />
+                    <Search className="h-5 w-5 text-gray-400 dark:text-gray-500" />
                   </div>
                   <Input
                     type="text"
@@ -183,8 +207,8 @@ export default function BrowsePage() {
             <div className="flex flex-wrap gap-4">
               {/* Category Filter */}
               <div className="flex items-center space-x-2">
-                <Filter className="h-4 w-4 text-gray-500" />
-                <span className="text-sm font-medium text-gray-700">Kategori:</span>
+                <Filter className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Kategori:</span>
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant={selectedCategory === '' ? 'primary' : 'outline'}
@@ -255,7 +279,7 @@ export default function BrowsePage() {
                         className="w-12 h-12 rounded-lg"
                       />
                       <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900 flex items-center">
+                        <h3 className="font-semibold text-gray-900 dark:text-white flex items-center">
                           {app.name}
                           {app.is_popular && (
                             <Star className="h-4 w-4 text-yellow-500 ml-2 fill-current" />
@@ -268,7 +292,7 @@ export default function BrowsePage() {
                     </div>
                   </div>
 
-                  <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
                     {app.description}
                   </p>
 

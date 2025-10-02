@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import DashboardLayout from '@/components/DashboardLayout'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -37,6 +37,7 @@ export default function DashboardPage() {
   const [loadingApps, setLoadingApps] = useState(true)
   const [transactions, setTransactions] = useState([])
   const [loadingTransactions, setLoadingTransactions] = useState(true)
+  const dataFetched = useRef(false)
 
   useEffect(() => {
     if (!loading && !user) {
@@ -45,11 +46,13 @@ export default function DashboardPage() {
   }, [user, loading, router])
 
   useEffect(() => {
-    if (user) {
+    if (user && !dataFetched.current) {
+      console.log('Dashboard: Fetching data for user:', user.id)
+      dataFetched.current = true
       fetchPopularApps()
       fetchTransactions()
     }
-  }, [user])
+  }, [user?.id]) // Use user.id instead of user object to prevent re-renders
 
   const fetchPopularApps = async () => {
     try {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -50,7 +50,6 @@ interface AppDetail {
     is_active: boolean
     is_available: boolean
     max_group_members: number
-    base_price: number
     admin_fee_percentage: number
     how_it_works?: string
   }
@@ -63,9 +62,11 @@ export default function AppDetailPage() {
   const [appDetail, setAppDetail] = useState<AppDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const appFetched = useRef(false)
 
   useEffect(() => {
-    if (params.id) {
+    if (params.id && !appFetched.current) {
+      appFetched.current = true
       fetchAppDetail()
     }
   }, [params.id])
@@ -124,7 +125,7 @@ export default function AppDetailPage() {
 
   const calculateSavings = () => {
     if (!appDetail) return 0
-    const individualPrice = appDetail.app.base_price
+    const individualPrice = appDetail.app.total_price
     const groupPrice = appDetail.price_per_user
     const savings = individualPrice - groupPrice
     return Math.round(savings)
@@ -132,7 +133,7 @@ export default function AppDetailPage() {
 
   const calculateSavingsPercentage = () => {
     if (!appDetail) return 0
-    const individualPrice = appDetail.app.base_price
+    const individualPrice = appDetail.app.total_price
     const groupPrice = appDetail.price_per_user
     const percentage = ((individualPrice - groupPrice) / individualPrice) * 100
     return Math.round(percentage)
@@ -143,7 +144,7 @@ export default function AppDetailPage() {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary-600 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-slate-600 dark:text-slate-400">Loading app details...</p>
+          <p className="text-slate-600 dark:text-slate-400">Memuat detail aplikasi...</p>
         </div>
       </div>
     )
@@ -157,14 +158,14 @@ export default function AppDetailPage() {
             <AlertCircle className="h-10 w-10 text-red-600 dark:text-red-400" />
           </div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
-            {error || 'App not found'}
+            {error || 'Aplikasi tidak ditemukan'}
           </h2>
           <p className="text-slate-600 dark:text-slate-400 mb-6">
-            The app you're looking for doesn't exist or is no longer available.
+            Aplikasi yang Anda cari tidak ada atau tidak tersedia lagi.
           </p>
           <Button onClick={() => router.push('/')} className="bg-primary-600 hover:bg-primary-700">
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Home
+            Kembali ke Beranda
           </Button>
         </div>
       </div>
@@ -186,7 +187,7 @@ export default function AppDetailPage() {
                 className="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 flex-shrink-0"
               >
                 <ArrowLeft className="h-5 w-5 sm:mr-2" />
-                <span className="hidden sm:inline">Back</span>
+                <span className="hidden sm:inline">Kembali</span>
               </Button>
               <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
                 <div className={`w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-r ${getCategoryColor(app.category)} rounded-xl sm:rounded-2xl flex items-center justify-center text-white shadow-lg flex-shrink-0`}>
@@ -202,7 +203,7 @@ export default function AppDetailPage() {
               {app.is_popular && (
                 <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white border-0 shadow-lg text-xs">
                   <Star className="h-3 w-3 mr-1" />
-                  <span className="hidden sm:inline">Popular</span>
+                  <span className="hidden sm:inline">Populer</span>
                 </Badge>
               )}
               <Button
@@ -211,7 +212,7 @@ export default function AppDetailPage() {
                 className="border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs sm:text-sm px-2 sm:px-3"
               >
                 <ExternalLink className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Visit Website</span>
+                <span className="hidden sm:inline">Kunjungi Website</span>
               </Button>
             </div>
           </div>
@@ -249,15 +250,15 @@ export default function AppDetailPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-6">
                       <div className="flex items-center text-slate-500 dark:text-slate-400 text-sm">
                         <Users className="h-4 w-4 sm:h-5 sm:w-5 mr-2 flex-shrink-0" />
-                        <span className="font-medium">{app.max_group_members} max members</span>
+                        <span className="font-medium">{app.max_group_members} anggota maksimal</span>
                       </div>
                       <div className="flex items-center text-slate-500 dark:text-slate-400 text-sm">
                         <Clock className="h-4 w-4 sm:h-5 sm:w-5 mr-2 flex-shrink-0" />
-                        <span className="font-medium">Monthly billing</span>
+                        <span className="font-medium">Tagihan bulanan</span>
                       </div>
                       <div className="flex items-center text-slate-500 dark:text-slate-400 text-sm">
                         <Shield className="h-4 w-4 sm:h-5 sm:w-5 mr-2 flex-shrink-0" />
-                        <span className="font-medium">Secure payment</span>
+                        <span className="font-medium">Pembayaran aman</span>
                       </div>
                     </div>
                   </div>
@@ -274,7 +275,7 @@ export default function AppDetailPage() {
               <Card className="p-4 sm:p-6 lg:p-8 border-0 shadow-xl">
                 <h3 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-4 sm:mb-6 flex items-center">
                   <DollarSign className="h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3 text-green-600" />
-                  Pricing Comparison
+                  Perbandingan Harga
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   {/* Individual Price */}
@@ -282,9 +283,9 @@ export default function AppDetailPage() {
                     <div className="text-center">
                       <h4 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white mb-2">Individual</h4>
                       <div className="text-2xl sm:text-3xl font-bold text-slate-600 dark:text-slate-300 mb-2">
-                        {formatCurrency(app.base_price)}
+                        {formatCurrency(app.total_price)}
                       </div>
-                      <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">per month</p>
+                      <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">per bulan</p>
                     </div>
                   </div>
 
@@ -292,18 +293,18 @@ export default function AppDetailPage() {
                   <div className="p-4 sm:p-6 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl sm:rounded-2xl border-2 border-green-200 dark:border-green-800">
                     <div className="text-center">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-center mb-2 space-y-1 sm:space-y-0 sm:space-x-2">
-                        <h4 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white">Group Sharing</h4>
+                        <h4 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white">Berbagi Grup</h4>
                         <Badge className="bg-green-600 text-white border-0 text-xs self-center">
                           <Heart className="h-3 w-3 mr-1" />
-                          Best Value
+                          Nilai Terbaik
                         </Badge>
                       </div>
                       <div className="text-2xl sm:text-3xl font-bold text-green-600 dark:text-green-400 mb-2">
                         {formatCurrency(appDetail.price_per_user)}
                       </div>
-                      <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-2 sm:mb-3">per person per month</p>
+                      <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-2 sm:mb-3">per orang per bulan</p>
                       <div className="text-xs sm:text-sm text-green-700 dark:text-green-300 font-medium">
-                        Save {formatCurrency(calculateSavings())} ({calculateSavingsPercentage()}%)
+                        Hemat {formatCurrency(calculateSavings())} ({calculateSavingsPercentage()}%)
                       </div>
                     </div>
                   </div>
@@ -374,18 +375,18 @@ export default function AppDetailPage() {
               <Card className="p-8 border-0 shadow-xl">
                 <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center">
                   <Play className="h-6 w-6 mr-3 text-purple-600" />
-                  How Group Sharing Works
+                  Cara Kerja Berbagi Grup
                 </h3>
                 <div className="space-y-6">
                   {(() => {
                     // Parse how_it_works from app data or use default
                     let steps = [
-                      "Create or join a group with friends",
-                      "One person becomes the group host",
-                      "Host subscribes to the service",
-                      "Share login credentials securely",
-                      "Split the cost equally among members",
-                      "Enjoy premium features together!"
+                      "Buat atau bergabung dengan grup bersama teman",
+                      "Satu orang menjadi host grup",
+                      "Host berlangganan layanan",
+                      "Bagikan kredensial login dengan aman",
+                      "Bagi biaya secara merata antar anggota",
+                      "Nikmati fitur premium bersama!"
                     ]
                     
                     if (app?.how_it_works) {
@@ -430,28 +431,28 @@ export default function AppDetailPage() {
               <Card className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800 shadow-xl">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center">
                   <Calculator className="h-5 w-5 mr-2 text-green-600" />
-                  Cost Breakdown
+                  Rincian Biaya
                 </h3>
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-slate-600 dark:text-slate-300">Base Price:</span>
-                    <span className="font-medium text-slate-900 dark:text-white">{formatCurrency(app.base_price)}</span>
+                    <span className="text-slate-600 dark:text-slate-300">Harga Total:</span>
+                    <span className="font-medium text-slate-900 dark:text-white">{formatCurrency(app.total_price)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600 dark:text-slate-300">Group Members:</span>
+                    <span className="text-slate-600 dark:text-slate-300">Anggota Grup:</span>
                     <span className="font-medium text-slate-900 dark:text-white">{app.max_group_members}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600 dark:text-slate-300">Per Person:</span>
-                    <span className="font-medium text-slate-900 dark:text-white">{formatCurrency(app.base_price / app.max_group_members)}</span>
+                    <span className="text-slate-600 dark:text-slate-300">Per Orang:</span>
+                    <span className="font-medium text-slate-900 dark:text-white">{formatCurrency(app.total_price / app.max_group_members)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600 dark:text-slate-300">Admin Fee:</span>
+                    <span className="text-slate-600 dark:text-slate-300">Biaya Admin:</span>
                     <span className="font-medium text-slate-900 dark:text-white">{formatCurrency((3500))}</span>
                   </div>
                   <div className="border-t border-green-200 dark:border-green-700 pt-3">
                     <div className="flex justify-between">
-                      <span className="font-semibold text-slate-900 dark:text-white">Total per Person:</span>
+                      <span className="font-semibold text-slate-900 dark:text-white">Total per Orang:</span>
                       <span className="font-bold text-green-600 dark:text-green-400 text-lg">{formatCurrency(appDetail.price_per_user)}</span>
                     </div>
                   </div>
@@ -467,14 +468,14 @@ export default function AppDetailPage() {
             >
               <Card className="p-4 sm:p-6 border-0 shadow-xl">
                 <div className="text-center">
-                  <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mb-3 sm:mb-4">Ready to Start?</h3>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mb-3 sm:mb-4">Siap Memulai?</h3>
                   <div className="space-y-2 sm:space-y-3">
                     <Button 
                       className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg text-sm sm:text-base py-2 sm:py-3"
                       onClick={() => router.push('/groups/create')}
                     >
                       <Users className="h-4 w-4 mr-2" />
-                      Create Group
+                      Buat Grup
                     </Button>
                     <Button 
                       variant="outline" 
@@ -482,7 +483,7 @@ export default function AppDetailPage() {
                       onClick={() => router.push(`/join?app=${app.id}`)}
                     >
                       <Search className="h-4 w-4 mr-2" />
-                      Join Group
+                      Bergabung Grup
                     </Button>
                     <Button 
                       variant="ghost" 
@@ -490,44 +491,13 @@ export default function AppDetailPage() {
                       onClick={() => window.open(app.website_url, '_blank')}
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
-                      Visit Official Website
+                      Kunjungi Website Resmi
                     </Button>
                   </div>
                 </div>
               </Card>
             </motion.div>
 
-            {/* Trust Indicators */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6, delay: 0.7 }}
-            >
-              <Card className="p-6 border-0 shadow-xl">
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center">
-                  <Shield className="h-5 w-5 mr-2 text-blue-600" />
-                  Why Trust Us?
-                </h3>
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-center space-x-3">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    <span className="text-slate-600 dark:text-slate-300">Secure payment processing</span>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    <span className="text-slate-600 dark:text-slate-300">24/7 customer support</span>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    <span className="text-slate-600 dark:text-slate-300">Money-back guarantee</span>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    <span className="text-slate-600 dark:text-slate-300">Easy group management</span>
-                  </div>
-                </div>
-              </Card>
-            </motion.div>
           </div>
         </div>
       </div>

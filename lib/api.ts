@@ -39,6 +39,12 @@ export const authAPI = {
   
   updateProfile: (data: any) => 
     api.put('/auth/profile', data),
+  
+  changePassword: (newPassword: string, otpCode: string) => 
+    api.put('/auth/change-password', { new_password: newPassword, otp_code: otpCode }),
+  
+  resetPassword: (email: string, newPassword: string, otpCode: string) => 
+    api.put('/auth/reset-password', { email, new_password: newPassword, otp_code: otpCode }),
 }
 
 export const otpAPI = {

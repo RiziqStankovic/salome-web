@@ -90,7 +90,7 @@ export default function AdminEmailSubmissionsPage() {
     if (user?.role === 'admin' || user?.is_admin) {
       fetchEmailSubmissions()
     }
-  }, [user])
+  }, [user?.id]) // Use user.id instead of user object to prevent re-renders
 
   // Refetch when filters change
   useEffect(() => {
