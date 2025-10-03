@@ -44,7 +44,8 @@ export default function LandingPage() {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    fullName: ''
+    fullName: '',
+    whatsappNumber: ''
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -61,6 +62,7 @@ export default function LandingPage() {
   const [forgotPasswordStep, setForgotPasswordStep] = useState(1) // 1: email, 2: OTP, 3: new password
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false)
   const [otpResendCooldown, setOtpResendCooldown] = useState(0) // in seconds
+  
   const [otpAttempts, setOtpAttempts] = useState(0) // track OTP attempts
   const [apps, setApps] = useState([])
   const [categories, setCategories] = useState([])
@@ -85,7 +87,7 @@ export default function LandingPage() {
         await login(formData.email, formData.password)
         toast.success('Berhasil login!')
       } else {
-        await register(formData.email, formData.password, formData.fullName)
+        await register(formData.email, formData.password, formData.fullName, formData.whatsappNumber)
         toast.success('Berhasil mendaftar! Silakan verifikasi email Anda.')
         // Redirect to email verification page
         router.push(`/verify-email?email=${encodeURIComponent(formData.email)}&purpose=email_verification`)
@@ -113,7 +115,7 @@ export default function LandingPage() {
   const toggleAuthMode = () => {
     setIsLogin(!isLogin)
     setError('') // Clear error when switching between login/register
-    setFormData({ email: '', password: '', fullName: '' }) // Clear form data
+    setFormData({ email: '', password: '', fullName: '', whatsappNumber: '' }) // Clear form data
     setShowPassword(false) // Reset password visibility
   }
 
@@ -200,14 +202,7 @@ export default function LandingPage() {
 
     setForgotPasswordLoading(true)
     try {
-      console.log('Sending reset password request:', {
-        email: forgotPasswordData.email,
-        otpCode: forgotPasswordData.otpCode,
-        newPassword: '***'
-      })
-      
       const response = await authAPI.resetPassword(forgotPasswordData.email, forgotPasswordData.newPassword, forgotPasswordData.otpCode)
-      console.log('Reset password response:', response)
       
       toast.success('Password berhasil diubah! Silakan login dengan password baru.')
       setShowForgotPassword(false)
@@ -219,12 +214,7 @@ export default function LandingPage() {
         confirmPassword: ''
       })
     } catch (error: any) {
-      console.log('Reset password error:', error)
-      console.log('Error response:', error.response)
-      console.log('Error data:', error.response?.data)
-      
       const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Gagal mengubah password'
-      console.log('Error message:', errorMessage)
       
       // Handle OTP errors specifically
       if (errorMessage.includes('Invalid OTP code') || errorMessage.includes('OTP code has already been used') || errorMessage.includes('OTP code has expired')) {
@@ -293,6 +283,7 @@ export default function LandingPage() {
       return () => clearTimeout(timeoutId)
     }
   }, [searchTerm, selectedCategory])
+
 
   const fetchApps = async () => {
     try {
@@ -505,8 +496,9 @@ export default function LandingPage() {
                   transition={{ duration: 0.6, delay: 0.5 }}
                   className="text-lg sm:text-xl text-gray-600 dark:text-gray-300 leading-relaxed max-w-2xl"
                 >
-                  Hemat hingga <span className="font-bold text-primary-600">90%</span> dengan patungan subscription aplikasi favorit bersama teman-teman. 
-                  <span className="block mt-2 text-base sm:text-lg font-medium text-gray-700 dark:text-gray-300">Aman, mudah, dan terpercaya.</span>
+                  Tanpa Ribet pembayaran Tanpa susah cari teman patungan
+                  {/* Hemat hingga <span className="font-bold text-primary-600">90%</span> dengan patungan subscription aplikasi favorit bersama teman-teman.  */}
+                  <span className="block mt-2 text-base sm:text-lg font-medium text-gray-700 dark:text-gray-300">Amanah, mudah, dan terpercaya.</span>
                 </motion.p>
               </div>
 
@@ -532,7 +524,7 @@ export default function LandingPage() {
                   className="px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg hover:scale-105 transition-all duration-200 border-2"
                 >
                   <Target className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-                  Lihat Grup
+                  Join Grup
                 </Button>
               </motion.div>
 
@@ -584,6 +576,17 @@ export default function LandingPage() {
                       placeholder="Masukkan nama lengkap"
                       value={formData.fullName}
                       onChange={(e) => handleInputChange('fullName', e.target.value)}
+                      required={!isLogin}
+                    />
+                  )}
+
+                  {!isLogin && (
+                    <Input
+                      label="Nomor WhatsApp"
+                      type="tel"
+                      placeholder="Contoh: 081234567890"
+                      value={formData.whatsappNumber}
+                      onChange={(e) => handleInputChange('whatsappNumber', e.target.value)}
                       required={!isLogin}
                     />
                   )}
@@ -1243,26 +1246,11 @@ export default function LandingPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold mb-4">Produk</h3>
+              <h3 className="text-lg font-semibold mb-4">Sosial Media</h3>
               <ul className="space-y-2 text-gray-400">
                 <li>
-                  <a href="/produk/patungan-grup" className="hover:text-white transition-colors">
-                    Patungan Grup
-                  </a>
-                </li>
-                <li>
-                  <a href="/produk/subscription-management" className="hover:text-white transition-colors">
-                    Subscription Management
-                  </a>
-                </li>
-                <li>
-                  <a href="/produk/payment-gateway" className="hover:text-white transition-colors">
-                    Payment Gateway
-                  </a>
-                </li>
-                <li>
-                  <a href="/produk/account-sharing" className="hover:text-white transition-colors">
-                    Account Sharing
+                  <a href="https://discord.gg/j46nFfdY" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
+                    Discord
                   </a>
                 </li>
               </ul>
@@ -1271,6 +1259,16 @@ export default function LandingPage() {
             <div>
               <h3 className="text-lg font-semibold mb-4">Support</h3>
               <ul className="space-y-2 text-gray-400">
+                <li>
+                  <a href="/produk/patungan-grup" className="hover:text-white transition-colors">
+                    Patungan Grup
+                  </a>
+                </li>
+                <li>
+                  <a href="/produk/account-sharing" className="hover:text-white transition-colors">
+                    Account Sharing
+                  </a>
+                </li>
                 <li>
                   <a href="/support/bantuan" className="hover:text-white transition-colors">
                     Bantuan
@@ -1284,11 +1282,6 @@ export default function LandingPage() {
                 <li>
                   <a href="/support/faq" className="hover:text-white transition-colors">
                     FAQ
-                  </a>
-                </li>
-                <li>
-                  <a href="/support/status" className="hover:text-white transition-colors">
-                    Status
                   </a>
                 </li>
               </ul>

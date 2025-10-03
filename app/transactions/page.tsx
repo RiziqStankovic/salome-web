@@ -13,7 +13,8 @@ import {
   Wallet,
   History,
   Calendar,
-  CreditCard
+  CreditCard,
+  ExternalLink
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -35,6 +36,7 @@ interface Transaction {
   description: string
   payment_method?: string
   payment_reference?: string
+  payment_link_id?: string
   status: string
   created_at: string
   updated_at: string
@@ -47,6 +49,7 @@ export default function TransactionsPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedType, setSelectedType] = useState('')
+  const [selectedStatus, setSelectedStatus] = useState('')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [stats, setStats] = useState({
@@ -65,6 +68,16 @@ export default function TransactionsPage() {
     { value: 'refund', label: 'Refund' }
   ]
 
+  const transactionStatuses = [
+    { value: '', label: 'All' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'success', label: 'Success' },
+    { value: 'failed', label: 'Failed' },
+    { value: 'expired', label: 'Expired' },
+    { value: 'cancelled', label: 'Cancelled' }
+  ]
+
   // Redirect to homepage if not logged in
   useEffect(() => {
     if (!authLoading && !user) {
@@ -72,24 +85,22 @@ export default function TransactionsPage() {
     }
   }, [user, authLoading, router])
 
+  // Fetch transactions when user is loaded or filters change
   useEffect(() => {
-    if (user && !transactionsFetched.current) {
-      console.log('Transactions: Fetching transactions for user:', user.id)
-      transactionsFetched.current = true
-      fetchTransactions()
-    }
-  }, [user?.id]) // Use user.id instead of user object to prevent re-renders
-
-  // Refetch when filters change (with debounce)
-  useEffect(() => {
-    if (transactionsFetched.current) {
-      const timeoutId = setTimeout(() => {
+    if (user) {
+      if (!transactionsFetched.current) {
+        // Initial load
+        transactionsFetched.current = true
         fetchTransactions()
-      }, 500) // Debounce search
-
-      return () => clearTimeout(timeoutId)
+      } else {
+        // Filter change - use debounce
+        const timeoutId = setTimeout(() => {
+          fetchTransactions()
+        }, 500) // Debounce search
+        return () => clearTimeout(timeoutId)
+      }
     }
-  }, [page, searchTerm, selectedType])
+  }, [user?.id, page, searchTerm, selectedType, selectedStatus])
 
   const fetchTransactions = async () => {
     try {
@@ -98,16 +109,18 @@ export default function TransactionsPage() {
         page,
         page_size: 20
       })
-      setTransactions(response.data.transactions || [])
+      const transactionsData = response.data.transactions || []
+      
+      
+      setTransactions(transactionsData)
       setTotalPages(response.data.total_pages || 1)
       
       // Calculate stats
-      const allTransactions = response.data.transactions || []
-      const totalAmount = allTransactions.reduce((sum: number, t: Transaction) => sum + t.amount, 0)
-      const topUpAmount = allTransactions
+      const totalAmount = transactionsData.reduce((sum: number, t: Transaction) => sum + t.amount, 0)
+      const topUpAmount = transactionsData
         .filter((t: Transaction) => t.type === 'top-up')
         .reduce((sum: number, t: Transaction) => sum + t.amount, 0)
-      const spentAmount = allTransactions
+      const spentAmount = transactionsData
         .filter((t: Transaction) => ['group_payment', 'withdrawal'].includes(t.type))
         .reduce((sum: number, t: Transaction) => sum + t.amount, 0)
       
@@ -128,7 +141,8 @@ export default function TransactionsPage() {
     const matchesSearch = transaction.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          transaction.type.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesType = !selectedType || transaction.type === selectedType
-    return matchesSearch && matchesType
+    const matchesStatus = !selectedStatus || transaction.status === selectedStatus
+    return matchesSearch && matchesType && matchesStatus
   })
 
   const getTransactionIcon = (type: string) => {
@@ -186,6 +200,77 @@ export default function TransactionsPage() {
       default:
         return type
     }
+  }
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return (
+          <Badge variant="warning" className="text-xs">
+            Pending
+          </Badge>
+        )
+      case 'completed':
+        return (
+          <Badge variant="success" className="text-xs">
+            Completed
+          </Badge>
+        )
+      case 'success':
+        return (
+          <Badge variant="success" className="text-xs">
+            Success
+          </Badge>
+        )
+      case 'failed':
+        return (
+          <Badge variant="error" className="text-xs">
+            Failed
+          </Badge>
+        )
+      case 'expired':
+        return (
+          <Badge variant="error" className="text-xs">
+            Expired
+          </Badge>
+        )
+      case 'cancelled':
+        return (
+          <Badge variant="gray" className="text-xs">
+            Cancelled
+          </Badge>
+        )
+      default:
+        return (
+          <Badge variant="gray" className="text-xs">
+            {status}
+          </Badge>
+        )
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'border-l-yellow-500'
+      case 'completed':
+        return 'border-l-green-500'
+      case 'success':
+        return 'border-l-green-500'
+      case 'failed':
+        return 'border-l-red-500'
+      case 'expired':
+        return 'border-l-red-500'
+      case 'cancelled':
+        return 'border-l-gray-500'
+      default:
+        return 'border-l-gray-500'
+    }
+  }
+
+  const getPaymentLinkURL = (paymentLinkId: string) => {
+    if (!paymentLinkId) return null
+    return `https://app.sandbox.midtrans.com/payment-links/${paymentLinkId}`
   }
 
   // Show loading while checking auth
@@ -292,20 +377,25 @@ export default function TransactionsPage() {
         </div>
 
         {/* Search and Filter */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-              <Input
-                type="text"
-                placeholder="Cari transaksi..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                <Input
+                  type="text"
+                  placeholder="Cari transaksi..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
             </div>
           </div>
-          <div className="flex gap-2">
+          
+          {/* Type Filters */}
+          <div className="flex flex-wrap gap-2">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">Tipe:</span>
             {transactionTypes.map((type) => (
               <Button
                 key={type.value}
@@ -314,6 +404,21 @@ export default function TransactionsPage() {
                 size="sm"
               >
                 {type.label}
+              </Button>
+            ))}
+          </div>
+
+          {/* Status Filters */}
+          <div className="flex flex-wrap gap-2">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">Status:</span>
+            {transactionStatuses.map((status) => (
+              <Button
+                key={status.value}
+                variant={selectedStatus === status.value ? 'primary' : 'outline'}
+                onClick={() => setSelectedStatus(status.value)}
+                size="sm"
+              >
+                {status.label}
               </Button>
             ))}
           </div>
@@ -343,7 +448,7 @@ export default function TransactionsPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                <Card className="p-6 hover:shadow-lg transition-shadow dark:bg-gray-800">
+                <Card className={`p-6 hover:shadow-lg transition-shadow dark:bg-gray-800 border-l-4 ${getStatusColor(transaction.status)}`}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
                       <div className={`p-3 rounded-lg ${getTransactionColor(transaction.type)}`}>
@@ -357,6 +462,7 @@ export default function TransactionsPage() {
                           <Badge variant="gray" className="text-xs">
                             {getTypeLabel(transaction.type)}
                           </Badge>
+                          {getStatusBadge(transaction.status)}
                         </div>
                         <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
                           <div className="flex items-center space-x-1">
@@ -383,6 +489,24 @@ export default function TransactionsPage() {
                             Ref: {transaction.payment_reference}
                           </p>
                         )}
+                        {transaction.status === 'pending' && transaction.payment_link_id && (
+                          <div className="mt-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                const paymentURL = getPaymentLinkURL(transaction.payment_link_id!)
+                                if (paymentURL) {
+                                  window.open(paymentURL, '_blank')
+                                }
+                              }}
+                              className="text-xs px-2 py-1 h-6 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700"
+                            >
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              Bayar Sekarang
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="text-right">
@@ -390,6 +514,11 @@ export default function TransactionsPage() {
                         {transaction.type === 'top-up' || transaction.type === 'refund' ? '+' : '-'}
                         {formatCurrency(transaction.amount)}
                       </p>
+                      {transaction.status === 'pending' && (
+                        <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                          Menunggu Pembayaran
+                        </p>
+                      )}
                     </div>
                   </div>
                 </Card>

@@ -49,12 +49,10 @@ export default function VerifyEmailPage() {
     return () => clearInterval(timer)
   }, [email, router])
 
-  const handleOTPComplete = async (otpCode: string) => {
+  const handleOTPComplete = (otpCode: string) => {
     setOtp(otpCode)
-    // Auto-submit when OTP is complete, but only if not already verifying
-    if (otpCode.length === 6 && !isVerifying.current) {
-      await handleVerify()
-    }
+    // Don't auto-submit to prevent double calls
+    // User must click verify button
   }
 
   const handleOTPChange = (otpCode: string) => {

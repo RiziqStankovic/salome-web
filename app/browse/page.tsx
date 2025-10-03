@@ -68,21 +68,17 @@ export default function BrowsePage() {
     }
   }, [])
 
-  // Fetch apps only once on mount
+  // Fetch apps when component mounts or filters change
   useEffect(() => {
     if (!appsFetched.current) {
+      // Initial load
       appsFetched.current = true
       fetchApps()
-    }
-  }, [])
-
-  // Refetch apps when filters change (with debounce)
-  useEffect(() => {
-    if (appsFetched.current) {
+    } else {
+      // Filter change - use debounce
       const timeoutId = setTimeout(() => {
         fetchApps()
       }, 500) // Debounce search
-
       return () => clearTimeout(timeoutId)
     }
   }, [pagination.page, selectedCategory, searchTerm, showPopularOnly])

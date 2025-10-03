@@ -22,7 +22,7 @@ export default function VerificationGuard({ children, fallback }: VerificationGu
       // User is not verified, redirect to verification page
       router.push(`/verify-email?email=${encodeURIComponent(user.email)}&purpose=email_verification`)
     }
-  }, [user, loading, router])
+  }, [user?.status, loading, router]) // Only depend on user.status, not entire user object
 
   // Show loading while checking user status
   if (loading) {

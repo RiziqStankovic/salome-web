@@ -29,8 +29,7 @@ import {
 import { useForm } from 'react-hook-form'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/contexts/AuthContext'
-import { accountCredentialsAPI, appAPI, authAPI, otpAPI } from '@/lib/api'
-import AppIcon from '@/components/AppIcon'
+import { accountCredentialsAPI, authAPI, otpAPI, groupAPI } from '@/lib/api'
 
 interface NotificationSettings {
   email_notifications: boolean
@@ -55,22 +54,22 @@ interface PrivacySettings {
 interface AccountCredentials {
   id: string
   user_id: string
-  app_id: string
-  username?: string
-  email?: string
+  group_id: string
+  username: string
+  email: string
+  description: string
   created_at: string
   updated_at: string
-  app?: {
+  group?: {
+    id: string
     name: string
-    icon_url?: string
-    description?: string
   }
 }
 
-interface App {
+
+interface Group {
   id: string
   name: string
-  icon_url?: string
   description?: string
 }
 
@@ -84,7 +83,7 @@ export default function SettingsPage() {
   
   // Account credentials state
   const [accountCredentials, setAccountCredentials] = useState<AccountCredentials[]>([])
-  const [apps, setApps] = useState<App[]>([])
+  const [groups, setGroups] = useState<Group[]>([])
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
   const [editingAccount, setEditingAccount] = useState<AccountCredentials | null>(null)
   
@@ -139,11 +138,11 @@ export default function SettingsPage() {
     }
   }, [searchParams])
 
-  // Fetch account credentials and apps
+  // Fetch account credentials and groups
   useEffect(() => {
     if (user) {
       fetchAccountCredentials()
-      fetchApps()
+      fetchUserGroups()
     }
   }, [user?.id]) // Use user.id instead of user object to prevent re-renders
 
@@ -156,12 +155,13 @@ export default function SettingsPage() {
     }
   }
 
-  const fetchApps = async () => {
+
+  const fetchUserGroups = async () => {
     try {
-      const response = await appAPI.getApps({ page: 1, page_size: 100 })
-      setApps(response.data.apps || [])
+      const response = await groupAPI.getUserGroups()
+      setGroups(response.data.groups || [])
     } catch (error) {
-      console.error('Error fetching apps:', error)
+      console.error('Error fetching user groups:', error)
     }
   }
 
@@ -172,13 +172,20 @@ export default function SettingsPage() {
 
 
   const handleSaveAccount = async (data: {
-    app_id: string
-    username?: string
-    email?: string
+    group_id: string
+    username: string
+    email: string
+    description: string
   }) => {
     setLoading(true)
     try {
-      await accountCredentialsAPI.createOrUpdateAccountCredentials(data)
+      // Convert group_id to app_id for API compatibility
+      const apiData = {
+        app_id: data.group_id,
+        username: data.username,
+        email: data.email
+      }
+      await accountCredentialsAPI.createOrUpdateAccountCredentials(apiData)
       toast.success(editingAccount ? 'Account berhasil diupdate' : 'Account berhasil ditambahkan')
       setShowAddAccountModal(false)
       setEditingAccount(null)
@@ -201,7 +208,6 @@ export default function SettingsPage() {
     setLoading(true)
     try {
       // Save notification settings
-      console.log('Saving notifications:', data)
       toast.success('Pengaturan notifikasi berhasil disimpan!')
     } catch (error) {
       toast.error('Gagal menyimpan pengaturan notifikasi')
@@ -214,7 +220,6 @@ export default function SettingsPage() {
     setLoading(true)
     try {
       // Save security settings
-      console.log('Saving security:', data)
       toast.success('Pengaturan keamanan berhasil disimpan!')
     } catch (error) {
       toast.error('Gagal menyimpan pengaturan keamanan')
@@ -227,7 +232,6 @@ export default function SettingsPage() {
     setLoading(true)
     try {
       // Save privacy settings
-      console.log('Saving privacy:', data)
       toast.success('Pengaturan privasi berhasil disimpan!')
     } catch (error) {
       toast.error('Gagal menyimpan pengaturan privasi')
@@ -716,17 +720,16 @@ export default function SettingsPage() {
                      accountCredentials.map((cred) => (
                        <div key={cred.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
                          <div className="flex items-center space-x-3">
-                           <AppIcon 
-                             iconUrl={cred.app?.icon_url}
-                             name={cred.app?.name || 'Unknown App'}
-                             size="lg"
-                             className="w-12 h-12 rounded-lg"
-                           />
+                           <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900 rounded-lg flex items-center justify-center">
+                             <Settings className="h-6 w-6 text-primary-600 dark:text-primary-400" />
+                           </div>
                            <div>
-                             <p className="font-medium text-gray-900 dark:text-white">{cred.app?.name || 'Unknown App'}</p>
+                             <p className="font-medium text-gray-900 dark:text-white">{cred.group?.name || 'Unknown Group'}</p>
                              <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
-                               {cred.email && <p>Email: {cred.email}</p>}
-                               {cred.username && <p>Username: {cred.username}</p>}
+                               <p>Grup: {cred.group?.name || 'Unknown'}</p>
+                               <p>Email: {cred.email}</p>
+                               <p>Username: {cred.username}</p>
+                               <p>Deskripsi: {cred.description}</p>
                              </div>
                            </div>
                          </div>
@@ -762,71 +765,83 @@ export default function SettingsPage() {
             <form onSubmit={(e) => {
               e.preventDefault()
               const formData = new FormData(e.target as HTMLFormElement)
-              const appId = formData.get('app_id') as string
+              const groupId = formData.get('group_id') as string
               const username = formData.get('username') as string
               const email = formData.get('email') as string
+              const description = formData.get('description') as string
+              
+              if (!groupId || !username || !email || !description) {
+                toast.error('Semua field harus diisi')
+                return
+              }
               
               handleSaveAccount({
-                app_id: appId,
-                username: username || undefined,
-                email: email || undefined
+                group_id: groupId,
+                username: username,
+                email: email,
+                description: description
               })
             }}>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Pilih Aplikasi
+                    Pilih Grup <span className="text-red-500">*</span>
                   </label>
-                   <select
-                     name="app_id"
-                     required
-                     defaultValue={editingAccount?.app_id || ''}
-                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                   >
-                     <option value="">Pilih aplikasi...</option>
-                     {apps.map((app) => (
-                       <option key={app.id} value={app.id}>
-                         {app.name}
-                       </option>
-                     ))}
-                   </select>
-                   {editingAccount?.app && (
-                     <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                       <div className="flex items-center space-x-2">
-                         <AppIcon 
-                           iconUrl={editingAccount.app.icon_url}
-                           name={editingAccount.app.name}
-                           size="sm"
-                         />
-                         <span className="text-sm text-gray-600 dark:text-gray-300">
-                           Aplikasi yang dipilih: {editingAccount.app.name}
-                         </span>
-                       </div>
-                     </div>
-                   )}
+                  <select
+                    name="group_id"
+                    required
+                    defaultValue={editingAccount?.group_id || ''}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  >
+                    <option value="">Pilih grup...</option>
+                    {groups.map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {group.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Hanya grup yang Anda miliki yang ditampilkan
+                  </p>
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Username (Opsional)
+                    Username <span className="text-red-500">*</span>
                   </label>
                   <Input
                     name="username"
                     type="text"
+                    required
                     defaultValue={editingAccount?.username || ''}
-                    placeholder="Masukkan username untuk aplikasi"
+                    placeholder="Masukkan username untuk account"
                   />
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Email (Opsional)
+                    Email <span className="text-red-500">*</span>
                   </label>
                   <Input
                     name="email"
                     type="email"
+                    required
                     defaultValue={editingAccount?.email || ''}
-                    placeholder="Masukkan email untuk aplikasi"
+                    placeholder="Masukkan email untuk account"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Deskripsi <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    name="description"
+                    required
+                    defaultValue={editingAccount?.description || ''}
+                    placeholder="Masukkan deskripsi untuk account ini"
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
                   />
                 </div>
               </div>

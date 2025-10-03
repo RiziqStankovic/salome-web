@@ -27,9 +27,12 @@ import {
   AlertTriangle,
   XCircle,
   X,
-  LogOut
+  LogOut,
+  ArrowLeft,
+  Shield,
+  RefreshCw
 } from 'lucide-react'
-import { groupAPI, messageAPI, paymentAPI, accountCredentialsAPI, emailSubmissionsAPI } from '@/lib/api'
+import { groupAPI, messageAPI, paymentAPI, accountCredentialsAPI, emailSubmissionsAPI, broadcastAPI } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import { motion } from 'framer-motion'
@@ -115,6 +118,16 @@ interface Group {
   }
 }
 
+interface Broadcast {
+  id: string
+  title: string
+  message: string
+  priority: number
+  start_date: string
+  end_date?: string
+  created_at: string
+}
+
 export default function GroupDetailPage() {
   const router = useRouter()
   const params = useParams()
@@ -128,6 +141,11 @@ export default function GroupDetailPage() {
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [loadingMembers, setLoadingMembers] = useState(false)
   const [sendingMessage, setSendingMessage] = useState(false)
+  const [refreshingMessages, setRefreshingMessages] = useState(false)
+  const [pullToRefresh, setPullToRefresh] = useState(false)
+  const [pullStartY, setPullStartY] = useState(0)
+  const [pullCurrentY, setPullCurrentY] = useState(0)
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true)
   const [activeTab, setActiveTab] = useState<'chat' | 'members' | 'settings'>('chat')
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -135,6 +153,8 @@ export default function GroupDetailPage() {
   const [processingPayment, setProcessingPayment] = useState(false)
   const [accountCredentials, setAccountCredentials] = useState<AccountCredentials | null>(null)
   const [loadingCredentials, setLoadingCredentials] = useState(false)
+  const [broadcasts, setBroadcasts] = useState<Broadcast[]>([])
+  const [loadingBroadcast, setLoadingBroadcast] = useState(false)
   const [selectedEmail, setSelectedEmail] = useState<string>('')
   const [showEmailSelector, setShowEmailSelector] = useState(false)
   const [allAccountCredentials, setAllAccountCredentials] = useState<AccountCredentials[]>([])
@@ -177,9 +197,17 @@ export default function GroupDetailPage() {
       credentialsFetched.current = true
       fetchAccountCredentials()
       fetchAllAccountCredentials()
-      // checkEmailSubmissionStatus will be called after credentials are loaded
+      // Check email submission status independently
+      checkEmailSubmissionStatus()
     }
   }, [group?.app?.id, user])
+
+  // Fetch broadcast when group is loaded
+  useEffect(() => {
+    if (groupId) {
+      fetchBroadcast()
+    }
+  }, [groupId])
 
   useEffect(() => {
     scrollToBottom()
@@ -199,6 +227,17 @@ export default function GroupDetailPage() {
       scrollToBottom()
     }
   }, [])
+
+  // Auto refresh messages every 30 seconds when chat tab is active
+  useEffect(() => {
+    if (activeTab === 'chat' && autoRefreshEnabled && !refreshingMessages) {
+      const interval = setInterval(() => {
+        refreshMessages()
+      }, 30000) // 30 seconds
+
+      return () => clearInterval(interval)
+    }
+  }, [activeTab, autoRefreshEnabled, refreshingMessages])
 
   // Close email selector when clicking outside
   useEffect(() => {
@@ -246,11 +285,37 @@ export default function GroupDetailPage() {
       } else if (error.response?.status === 401) {
         toast.error('Sesi Anda telah berakhir. Silakan login kembali.')
         router.push('/?redirect=' + encodeURIComponent(window.location.pathname))
+      } else if (error.response?.status === 500) {
+        toast.error('Terjadi kesalahan server. Silakan coba lagi.')
+        console.error('Server error details:', error.response?.data)
       } else {
         toast.error('Gagal memuat detail grup')
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchBroadcast = async () => {
+    try {
+      setLoadingBroadcast(true)
+      const response = await broadcastAPI.getGroupBroadcast(groupId)
+      
+      if (response.data?.data) {
+        // Handle both single broadcast and array of broadcasts
+        if (Array.isArray(response.data.data)) {
+          setBroadcasts(response.data.data)
+        } else {
+          setBroadcasts([response.data.data])
+        }
+      } else {
+        setBroadcasts([])
+      }
+    } catch (error: any) {
+      console.error('Error fetching broadcasts:', error)
+      setBroadcasts([])
+    } finally {
+      setLoadingBroadcast(false)
     }
   }
 
@@ -266,13 +331,7 @@ export default function GroupDetailPage() {
         setSelectedEmail(response.data.data.email)
       }
       
-      // Check email submission status after account credentials are loaded
-      if (user) {
-        // Add small delay to prevent race conditions
-        setTimeout(() => {
-          checkEmailSubmissionStatus()
-        }, 100)
-      }
+      // Email submission status will be checked independently
     } catch (error: any) {
       console.error('Error fetching account credentials:', error)
       // If no credentials found, set to null (will use user data as fallback)
@@ -284,7 +343,7 @@ export default function GroupDetailPage() {
   }
 
   const checkEmailSubmissionStatus = async () => {
-    if (!group?.id || !group?.app?.id) {
+    if (!group?.id) {
       return
     }
     
@@ -297,7 +356,6 @@ export default function GroupDetailPage() {
       // Check if there's an approved submission for this group
       const approvedSubmission = submissions.find((sub: any) => 
         sub.group_id === group.id && 
-        sub.app_id === group.app.id && 
         sub.status === 'approved'
       )
       
@@ -309,7 +367,6 @@ export default function GroupDetailPage() {
         // Check if there's a rejected submission
         const rejectedSubmission = submissions.find((sub: any) => 
           sub.group_id === group.id && 
-          sub.app_id === group.app.id && 
           sub.status === 'rejected'
         )
         
@@ -321,7 +378,6 @@ export default function GroupDetailPage() {
           // Check if there's a pending submission
           const pendingSubmission = submissions.find((sub: any) => 
             sub.group_id === group.id && 
-            sub.app_id === group.app.id && 
             sub.status === 'pending'
           )
           
@@ -373,6 +429,60 @@ export default function GroupDetailPage() {
     } finally {
       setLoadingMessages(false)
     }
+  }
+
+  const refreshMessages = async () => {
+    try {
+      setRefreshingMessages(true)
+      const response = await messageAPI.getGroupMessages(groupId)
+      const messages = response.data.messages || []
+      // Sort messages by created_at ascending (oldest first, newest at bottom)
+      const sortedMessages = messages.sort((a: GroupMessage, b: GroupMessage) => {
+        const dateA = new Date(a.created_at).getTime()
+        const dateB = new Date(b.created_at).getTime()
+        return dateA - dateB
+      })
+      setMessages(sortedMessages)
+      toast.success('Chat berhasil diperbarui')
+    } catch (error: any) {
+      console.error('Error refreshing messages:', error)
+      if (error.response?.status === 403) {
+        toast.error('Anda tidak memiliki akses ke chat grup ini')
+      } else {
+        toast.error('Gagal memperbarui chat')
+      }
+    } finally {
+      setRefreshingMessages(false)
+    }
+  }
+
+  // Pull to refresh handlers
+  const handlePullStart = (e: React.TouchEvent) => {
+    if (messagesContainerRef.current?.scrollTop === 0) {
+      setPullStartY(e.touches[0].clientY)
+      setPullCurrentY(e.touches[0].clientY)
+    }
+  }
+
+  const handlePullMove = (e: React.TouchEvent) => {
+    if (pullStartY > 0 && messagesContainerRef.current?.scrollTop === 0) {
+      const currentY = e.touches[0].clientY
+      const diff = currentY - pullStartY
+      
+      if (diff > 0) {
+        setPullCurrentY(currentY)
+        setPullToRefresh(diff > 50)
+      }
+    }
+  }
+
+  const handlePullEnd = () => {
+    if (pullToRefresh) {
+      refreshMessages()
+    }
+    setPullStartY(0)
+    setPullCurrentY(0)
+    setPullToRefresh(false)
   }
 
   const fetchMembers = async () => {
@@ -667,17 +777,31 @@ export default function GroupDetailPage() {
   const isExpired = group?.expires_at ? new Date(group.expires_at) < new Date() : false
   const isGroupFull = (group?.current_members || 0) >= (group?.max_members || 0)
 
-  // Debug logging
-  console.log('Current group state:', group)
-  console.log('Group name:', group?.name)
-  console.log('Group price_per_member:', group?.price_per_member)
-  console.log('Group admin_fee:', group?.admin_fee)
-  console.log('Group total_price:', group?.total_price)
 
   if (loading) {
     return (
       <DashboardLayout>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Back Button */}
+          <div className="mb-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (user?.is_admin) {
+                  // Admin view - kembali ke admin groups page
+                  router.push('/admin/groups')
+                } else {
+                  // User biasa - kembali ke halaman sebelumnya
+                  router.back()
+                }
+              }}
+              className="flex items-center space-x-2 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>{user?.is_admin ? 'Kembali ke Admin' : 'Kembali'}</span>
+            </Button>
+          </div>
+          
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -692,12 +816,34 @@ export default function GroupDetailPage() {
   if (!group) {
     return (
       <DashboardLayout>
-        <div className="text-center py-12">
-          <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <p className="text-xl text-gray-600 dark:text-gray-300">Grup tidak ditemukan</p>
-          <Button onClick={() => router.push('/groups')} className="mt-4">
-            Kembali ke Daftar Grup
-          </Button>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Back Button */}
+          <div className="mb-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (user?.is_admin) {
+                  // Admin view - kembali ke admin groups page
+                  router.push('/admin/groups')
+                } else {
+                  // User biasa - kembali ke halaman sebelumnya
+                  router.back()
+                }
+              }}
+              className="flex items-center space-x-2 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>{user?.is_admin ? 'Kembali ke Admin' : 'Kembali'}</span>
+            </Button>
+          </div>
+          
+          <div className="text-center py-12">
+            <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <p className="text-xl text-gray-600 dark:text-gray-300">Grup tidak ditemukan</p>
+            <Button onClick={() => router.push('/groups')} className="mt-4">
+              Kembali ke Daftar Grup
+            </Button>
+          </div>
         </div>
       </DashboardLayout>
     )
@@ -713,6 +859,26 @@ export default function GroupDetailPage() {
           transition={{ duration: 0.6 }}
           className="mb-8"
         >
+          {/* Back Button */}
+          <div className="mb-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (user?.is_admin) {
+                  // Admin view - kembali ke admin groups page
+                  router.push('/admin/groups')
+                } else {
+                  // User biasa - kembali ke halaman sebelumnya
+                  router.back()
+                }
+              }}
+              className="flex items-center space-x-2 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>{user?.is_admin ? 'Kembali ke Admin' : 'Kembali'}</span>
+            </Button>
+          </div>
+          
           <div className="flex items-start justify-between">
             <div className="flex items-center space-x-4">
               <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
@@ -725,18 +891,28 @@ export default function GroupDetailPage() {
                 )}
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{group.name}</h1>
+                <div className="flex items-center space-x-2">
+                  <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{group.name}</h1>
+                  {user?.is_admin && (
+                    <Badge variant="primary" className="flex items-center space-x-1">
+                      <Shield className="h-3 w-3" />
+                      <span>Admin View</span>
+                    </Badge>
+                  )}
+                </div>
                 <p className="text-gray-600 dark:text-gray-300 mt-1">{group.app?.name}</p>
                 <div className="flex items-center space-x-4 mt-2">
                   <Badge 
                     variant={
                       isExpired ? 'error' : 
-                      group.group_status === 'open' ? 'success' : 
+                      group.group_status === 'open' ? 'primary' : 
+                      group.group_status === 'paid_group' ? 'success' :
                       group.group_status === 'full' || isGroupFull ? 'warning' : 'primary'
                     }
                   >
                     {isExpired ? 'Kedaluwarsa' : 
                      group.group_status === 'open' ? 'Terbuka' : 
+                     group.group_status === 'paid_group' ? 'Lunas' :
                      group.group_status === 'full' || isGroupFull ? 'Penuh' : 'Aktif'}
                   </Badge>
                   <span className="text-sm text-gray-500 dark:text-gray-400">
@@ -768,6 +944,101 @@ export default function GroupDetailPage() {
           </div>
         </motion.div>
 
+        {/* Broadcast Display */}
+        {broadcasts.length > 0 && (
+          <div className="mb-6 space-y-4">
+            {broadcasts.map((broadcast, index) => (
+              <motion.div
+                key={broadcast.id}
+                initial={{ y: -20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+                className="relative"
+              >
+                <div className="relative overflow-hidden rounded-xl shadow-xl border border-orange-200 dark:border-orange-800">
+                  {/* Gradient Background */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-orange-400 via-orange-500 to-yellow-400 dark:from-orange-500 dark:via-orange-600 dark:to-yellow-500"></div>
+                  
+                  {/* Animated Background Pattern */}
+                  <div className="absolute inset-0 opacity-10">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[length:20px_20px] animate-pulse"></div>
+                  </div>
+                  
+                  {/* Content */}
+                  <div className="relative p-6">
+                    <div className="flex items-start space-x-4">
+                      {/* Icon */}
+                      <div className="flex-shrink-0">
+                        <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg border border-white/30">
+                          <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                      </div>
+                      
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-white font-bold text-xl leading-tight">
+                            {broadcast.title}
+                          </h3>
+                          <div className="flex items-center space-x-2">
+                            {/* Priority Badge */}
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold shadow-sm ${
+                              broadcast.priority === 3 
+                                ? 'bg-red-500/20 text-red-100 border border-red-400/30' 
+                                : broadcast.priority === 2 
+                                ? 'bg-yellow-500/20 text-yellow-100 border border-yellow-400/30'
+                                : 'bg-green-500/20 text-green-100 border border-green-400/30'
+                            }`}>
+                              {broadcast.priority === 3 ? '🔴 URGENT' : 
+                               broadcast.priority === 2 ? '🟡 HIGH' : '🟢 NORMAL'}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Message */}
+                        <p className="text-white/95 text-base leading-relaxed mb-4 font-medium">
+                          {broadcast.message}
+                        </p>
+                        
+                        {/* Footer */}
+                        <div className="flex items-center justify-between text-sm">
+                          <div className="flex items-center space-x-2 text-white/80">
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                            </svg>
+                            <span className="font-medium">
+                              {new Date(broadcast.created_at).toLocaleDateString('id-ID', {
+                                day: 'numeric',
+                                month: 'long',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center space-x-1 text-white/70">
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="text-xs">Made by Admin</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Bottom Border Accent */}
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-300 to-yellow-300 dark:from-orange-400 dark:to-yellow-400"></div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content */}
           <div className="lg:col-span-2 order-2 lg:order-1">
@@ -780,6 +1051,11 @@ export default function GroupDetailPage() {
               >
                 <MessageCircle className="h-4 w-4 mr-2" />
                 Chat
+                {user?.role === 'admin' && (
+                  <Badge variant="primary" className="ml-2 text-xs">
+                    Admin
+                  </Badge>
+                )}
               </Button>
               <Button
                 variant={activeTab === 'members' ? 'primary' : 'ghost'}
@@ -807,11 +1083,75 @@ export default function GroupDetailPage() {
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 0.6 }}
-                className="flex flex-col h-80 sm:h-96"
+                className="flex flex-col h-96 sm:h-[500px]"
               >
                 <Card className="flex-1 flex flex-col p-0 dark:bg-gray-800">
+                  {/* Chat Header */}
+                  <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+                    <div className="flex items-center space-x-2">
+                      <MessageCircle className="h-5 w-5 text-primary-600" />
+                      <h3 className="font-semibold text-gray-900 dark:text-white">Chat Grup</h3>
+                      {messages.length > 0 && (
+                        <Badge variant="gray" className="text-xs">
+                          {messages.length} pesan
+                        </Badge>
+                      )}
+                      {autoRefreshEnabled && (
+                        <Badge variant="success" className="text-xs">
+                          Auto-refresh
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                        className="h-8 px-2 text-xs hover:bg-gray-200 dark:hover:bg-gray-600"
+                        title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh"}
+                      >
+                        {autoRefreshEnabled ? "Auto ON" : "Auto OFF"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={refreshMessages}
+                        disabled={refreshingMessages}
+                        className="h-8 w-8 p-0 hover:bg-gray-200 dark:hover:bg-gray-600"
+                        title="Refresh chat"
+                      >
+                        <RefreshCw className={`h-4 w-4 text-gray-600 dark:text-gray-300 ${refreshingMessages ? 'animate-spin' : ''}`} />
+                      </Button>
+                    </div>
+                  </div>
+                  
                   {/* Messages */}
-                  <div ref={messagesContainerRef} className="h-60 sm:h-72 overflow-y-auto p-4 space-y-4 scroll-smooth">
+                  <div 
+                    ref={messagesContainerRef} 
+                    className="h-72 sm:h-[380px] overflow-y-auto p-4 space-y-1 scroll-smooth relative bg-gray-50 dark:bg-gray-900"
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23f3f4f6' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+                      backgroundRepeat: 'repeat'
+                    }}
+                    onTouchStart={handlePullStart}
+                    onTouchMove={handlePullMove}
+                    onTouchEnd={handlePullEnd}
+                  >
+                    {/* Pull to refresh indicator */}
+                    {pullStartY > 0 && (
+                      <div 
+                        className="absolute top-0 left-0 right-0 flex items-center justify-center py-2 bg-primary-50 dark:bg-primary-900/20 transition-all duration-200"
+                        style={{
+                          transform: `translateY(${Math.min(pullCurrentY - pullStartY, 60)}px)`,
+                          opacity: pullToRefresh ? 1 : 0.5
+                        }}
+                      >
+                        <RefreshCw className={`h-5 w-5 text-primary-600 ${pullToRefresh ? 'animate-spin' : ''}`} />
+                        <span className="ml-2 text-sm text-primary-600 font-medium">
+                          {pullToRefresh ? 'Lepas untuk refresh' : 'Tarik untuk refresh'}
+                        </span>
+                      </div>
+                    )}
                     {loadingMessages ? (
                       <div className="text-center py-8">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -826,70 +1166,96 @@ export default function GroupDetailPage() {
                         </p>
                       </div>
                     ) : (
-                      messages.map((message) => (
-                        <div
-                          key={message.id}
-                          className={`flex ${message.user_id === user?.id ? 'justify-end' : 'justify-start'}`}
-                        >
-                          <div
-                            className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                              message.user_id === user?.id
-                                ? 'bg-primary-600 text-white'
-                                : 'bg-gray-100 dark:bg-gray-700'
-                            }`}
-                          >
-                            <div className="flex items-center space-x-2 mb-1">
-                              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-semibold ${
-                                message.user_id === user?.id 
-                                  ? 'bg-white bg-opacity-20 text-white' 
-                                  : 'bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400'
-                              }`}>
-                                {message.user.full_name.charAt(0).toUpperCase()}
+                      messages.map((message, index) => {
+                        const messageDate = new Date(message.created_at)
+                        const prevMessageDate = index > 0 ? new Date(messages[index - 1].created_at) : null
+                        const showDateSeparator = !prevMessageDate || 
+                          messageDate.toDateString() !== prevMessageDate.toDateString()
+                        
+                        return (
+                          <div key={message.id}>
+                            {/* Date Separator */}
+                            {showDateSeparator && (
+                              <div className="flex justify-center my-4">
+                                <div className="bg-gray-500 dark:bg-gray-600 text-white text-xs px-3 py-1 rounded-full">
+                                  {messageDate.toLocaleDateString('id-ID', {
+                                    weekday: 'long',
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric'
+                                  })}
+                                </div>
                               </div>
-                              <p className={`text-sm font-bold ${
-                                message.user_id === user?.id 
-                                  ? 'text-white' 
-                                  : 'text-gray-800 dark:text-gray-200'
+                            )}
+                            
+                            {/* Message */}
+                            <div className={`flex ${message.user_id === user?.id ? 'justify-end' : 'justify-start'} mb-2`}>
+                              <div className={`max-w-xs lg:max-w-md px-3 py-2 rounded-2xl ${
+                                message.user_id === user?.id
+                                  ? 'bg-primary-600 text-white rounded-br-md'
+                                  : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md'
                               }`}>
-                                {message.user.full_name}
-                              </p>
+                                {/* Sender name for incoming messages */}
+                                {message.user_id !== user?.id && (
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center text-sm font-bold text-primary-600 dark:text-primary-400">
+                                      {message.user.full_name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                                      {message.user.full_name}
+                                    </p>
+                                  </div>
+                                )}
+                                
+                                {/* Message content */}
+                                <p className={`text-base leading-relaxed ${
+                                  message.user_id === user?.id 
+                                    ? 'text-white' 
+                                    : 'text-gray-900 dark:text-white'
+                                }`}>
+                                  {message.message}
+                                </p>
+                                
+                                {/* Timestamp */}
+                                <div className={`flex items-center justify-end mt-1 ${
+                                  message.user_id === user?.id ? 'text-primary-100' : 'text-gray-500 dark:text-gray-400'
+                                }`}>
+                                  <span className="text-[10px] leading-none">
+                                    {messageDate.toLocaleTimeString('id-ID', {
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
-                            <p className={`text-sm font-normal ${
-                              message.user_id === user?.id 
-                                ? 'text-white' 
-                                : 'text-gray-700 dark:text-gray-300'
-                            }`}>
-                              {message.message}
-                            </p>
-                            <p className="text-xs opacity-70 mt-1">
-                              {new Date(message.created_at).toLocaleTimeString('id-ID', {
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </p>
                           </div>
-                        </div>
-                      ))
+                        )
+                      })
                     )}
                     <div ref={messagesEndRef} />
                   </div>
 
                   {/* Message Input */}
-                  <form onSubmit={sendMessage} className="p-4 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex space-x-2">
-                      <Input
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        placeholder="Tulis pesan..."
-                        disabled={sendingMessage}
-                        className="flex-1"
-                      />
+                  <form onSubmit={sendMessage} className="p-3 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex items-end space-x-2">
+                      <div className="flex-1">
+                        <Input
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          placeholder="Tulis pesan..."
+                          disabled={sendingMessage}
+                          className="w-full px-4 py-3 rounded-full border-2 border-gray-200 dark:border-gray-600 focus:border-primary-500 dark:focus:border-primary-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 resize-none"
+                          style={{ minHeight: '44px' }}
+                        />
+                      </div>
                       <Button
                         type="submit"
                         disabled={!newMessage.trim() || sendingMessage}
                         loading={sendingMessage}
+                        className="w-11 h-11 rounded-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 p-0 flex items-center justify-center"
                       >
-                        <Send className="h-4 w-4" />
+                        <Send className="h-5 w-5 text-white" />
                       </Button>
                     </div>
                   </form>
@@ -905,6 +1271,18 @@ export default function GroupDetailPage() {
                 transition={{ duration: 0.6 }}
                 className="space-y-6"
               >
+                {/* Deskripsi Grup */}
+                {group?.description && (
+                  <Card className="p-6 dark:bg-gray-800">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
+                      <MessageCircle className="h-5 w-5 mr-2 text-primary-600" />
+                      Deskripsi Grup
+                    </h3>
+                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                      {group.description}
+                    </p>
+                  </Card>
+                )}
                 {/* Informasi User untuk Grup Patungan */}
                 <Card className="p-6 dark:bg-gray-800">
                   <div className="flex items-center justify-between mb-4">
@@ -917,15 +1295,6 @@ export default function GroupDetailPage() {
                       size="sm" 
                       variant="outline" 
                       onClick={() => {
-                        console.log('🔧 Manual check triggered')
-                        console.log('Current state:', { 
-                          groupId: group?.id, 
-                          appId: group?.app?.id,
-                          userId: user?.id,
-                          currentStatus: emailSubmissionStatus,
-                          approvedEmail,
-                          rejectedEmail
-                        })
                         checkEmailSubmissionStatus()
                       }}
                       className="text-xs"
@@ -1609,15 +1978,6 @@ export default function GroupDetailPage() {
                   </span>
                 </div>
                 
-                {/* Deskripsi Grup */}
-                {group?.description && (
-                  <div className="flex items-start justify-between">
-                    <span className="text-sm text-gray-600 dark:text-gray-300">Deskripsi</span>
-                    <span className="font-medium text-gray-900 dark:text-white text-right max-w-48 text-sm">
-                      {group.description}
-                    </span>
-                  </div>
-                )}
 
                 {/* Aplikasi */}
                 <div className="flex items-center justify-between">
@@ -1642,12 +2002,14 @@ export default function GroupDetailPage() {
                   <Badge 
                     variant={
                       isExpired ? 'error' : 
-                      group?.group_status === 'open' ? 'success' : 
+                      group?.group_status === 'open' ? 'primary' : 
+                      group?.group_status === 'paid_group' ? 'success' :
                       group?.group_status === 'full' || isGroupFull ? 'warning' : 'primary'
                     }
                   >
                     {isExpired ? 'Kedaluwarsa' : 
                      group?.group_status === 'open' ? 'Terbuka' : 
+                     group?.group_status === 'paid_group' ? 'Lunas' :
                      group?.group_status === 'full' || isGroupFull ? 'Penuh' : 'Aktif'}
                   </Badge>
                 </div>
@@ -1668,11 +2030,11 @@ export default function GroupDetailPage() {
                   </span>
                 </div>
 
-                {/* Harga per Anggota */}
+                {/* Total Aplikasi */}
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-300">Harga per Anggota</span>
-                  <span className="font-semibold text-primary-600 dark:text-primary-400">
-                    {formatCurrency((group?.price_per_member || 0) + (group?.admin_fee || 0))}
+                  <span className="text-sm text-gray-600 dark:text-gray-300">Total Aplikasi</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {formatCurrency(group?.total_price || 0)}
                   </span>
                 </div>
 
@@ -1684,11 +2046,11 @@ export default function GroupDetailPage() {
                   </span>
                 </div>
 
-                {/* Total Aplikasi */}
+                {/* Harga per Anggota */}
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-300">Total Aplikasi</span>
-                  <span className="font-semibold text-gray-900 dark:text-white">
-                    {formatCurrency(group?.total_price || 0)}
+                  <span className="text-sm text-gray-600 dark:text-gray-300">Harga per Anggota</span>
+                  <span className="font-semibold text-primary-600 dark:text-primary-400">
+                    {formatCurrency((group?.price_per_member || 0) + (group?.admin_fee || 0))}
                   </span>
                 </div>
 

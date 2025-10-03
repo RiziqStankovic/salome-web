@@ -21,22 +21,36 @@ import {
   ArrowDownRight
 } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { appAPI, transactionAPI } from '@/lib/api'
+import { appAPI, transactionAPI, groupAPI } from '@/lib/api'
+import UserBroadcastWidget from '@/components/UserBroadcastWidget'
 import { formatCurrency } from '@/lib/utils'
+
+interface RecentActivity {
+  id: string
+  type: 'transaction' | 'group'
+  title: string
+  description: string
+  timestamp: string
+  status: string
+  icon: 'success' | 'warning' | 'error' | 'primary'
+}
 
 export default function DashboardPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
   const [stats, setStats] = useState({
-    totalGroups: 0,
-    activeSubscriptions: 0,
-    totalSavings: 0,
-    pendingPayments: 0
+    balance: 0, // Saldo user (belum ada, jadi 0)
+    totalTransactions: 0, // Jumlah transaksi
+    totalExpenses: 0, // Total pengeluaran
+    pendingPayments: 0 // Pembayaran pending
   })
   const [popularApps, setPopularApps] = useState([])
   const [loadingApps, setLoadingApps] = useState(true)
   const [transactions, setTransactions] = useState([])
   const [loadingTransactions, setLoadingTransactions] = useState(true)
+  const [userGroups, setUserGroups] = useState([])
+  const [loadingGroups, setLoadingGroups] = useState(true)
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([])
   const dataFetched = useRef(false)
 
   useEffect(() => {
@@ -47,12 +61,19 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (user && !dataFetched.current) {
-      console.log('Dashboard: Fetching data for user:', user.id)
       dataFetched.current = true
       fetchPopularApps()
       fetchTransactions()
+      fetchUserGroups()
     }
   }, [user?.id]) // Use user.id instead of user object to prevent re-renders
+
+  // Calculate stats when transactions data changes
+  useEffect(() => {
+    if (transactions.length > 0) {
+      calculateStats()
+    }
+  }, [transactions])
 
   const fetchPopularApps = async () => {
     try {
@@ -76,6 +97,90 @@ export default function DashboardPage() {
     } finally {
       setLoadingTransactions(false)
     }
+  }
+
+  const fetchUserGroups = async () => {
+    try {
+      setLoadingGroups(true)
+      const response = await groupAPI.getUserGroups()
+      setUserGroups(response.data.groups || [])
+    } catch (error) {
+      console.error('Error fetching user groups:', error)
+    } finally {
+      setLoadingGroups(false)
+    }
+  }
+
+  const calculateStats = () => {
+    if (!Array.isArray(transactions) || transactions.length === 0) {
+      setStats({
+        balance: 0,
+        totalTransactions: 0,
+        totalExpenses: 0,
+        pendingPayments: 0
+      })
+      return
+    }
+
+    const totalTransactions = transactions.length
+    const totalExpenses = (transactions as any[]).reduce((sum, transaction) => {
+      return sum + (transaction.amount || 0)
+    }, 0)
+    
+    const pendingPayments = (transactions as any[]).filter((transaction: any) => 
+      transaction.status === 'pending'
+    ).length
+
+    setStats({
+      balance: 0, // Belum ada saldo system
+      totalTransactions,
+      totalExpenses,
+      pendingPayments
+    })
+  }
+
+  const generateRecentActivities = (): RecentActivity[] => {
+    const activities: RecentActivity[] = []
+    
+    // Add recent transactions
+    if (Array.isArray(transactions) && transactions.length > 0) {
+      (transactions as any[]).slice(0, 1).forEach((transaction: any) => {
+      const statusText = transaction.status === 'success' ? 'berhasil' : 
+                        transaction.status === 'pending' ? 'pending' : 
+                        transaction.status === 'failed' ? 'gagal' : transaction.status
+      
+      activities.push({
+        id: `txn-${transaction.id}`,
+        type: 'transaction' as const,
+        title: `Pembayaran ${transaction.app_name || 'Aplikasi'} ${statusText}`,
+        description: `Rp ${formatCurrency(transaction.amount)}`,
+        timestamp: transaction.created_at,
+        status: transaction.status,
+        icon: transaction.status === 'success' ? 'success' as const : 
+              transaction.status === 'pending' ? 'warning' as const : 'error' as const
+      })
+      })
+    }
+    
+    // Add recent groups (created or joined)
+    if (Array.isArray(userGroups) && userGroups.length > 0) {
+      (userGroups as any[]).slice(0, 1).forEach((group: any) => {
+      activities.push({
+        id: `group-${group.id}`,
+        type: 'group' as const,
+        title: `Grup "${group.name}" ${group.group_status === 'paid_group' ? 'lunas' : 'dibuat'}`,
+        description: `${group.app_name || 'Aplikasi'} - ${group.current_members}/${group.max_members} anggota`,
+        timestamp: group.created_at,
+        status: group.group_status,
+        icon: group.group_status === 'paid_group' ? 'success' as const : 'primary' as const
+      })
+      })
+    }
+    
+    // Sort by timestamp (newest first) and take first 2
+    return activities
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 2)
   }
 
 
@@ -130,7 +235,7 @@ export default function DashboardPage() {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Saldo</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {formatCurrency(user.balance || 0)}
+                  Rp 0
                 </p>
               </div>
             </div>
@@ -142,8 +247,8 @@ export default function DashboardPage() {
                 <Users className="h-6 w-6 text-success-600 dark:text-success-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Grup</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalGroups}</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Jumlah Transaksi</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalTransactions}</p>
               </div>
             </div>
           </Card>
@@ -154,8 +259,8 @@ export default function DashboardPage() {
                 <TrendingUp className="h-6 w-6 text-warning-600 dark:text-warning-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Penghematan</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">Rp {stats.totalSavings.toLocaleString()}</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Pengeluaran</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(stats.totalExpenses)}</p>
               </div>
             </div>
           </Card>
@@ -166,13 +271,23 @@ export default function DashboardPage() {
                 <History className="h-6 w-6 text-error-600 dark:text-error-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Pengeluaran</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Pembayaran Pending</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {formatCurrency(user.total_spent || 0)}
+                  {stats.pendingPayments}
                 </p>
               </div>
             </div>
           </Card>
+        </motion.div>
+
+        {/* Broadcast Widget */}
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.6, delay: 0.15 }}
+          className="mb-8"
+        >
+          <UserBroadcastWidget />
         </motion.div>
 
         {/* Quick Actions */}
@@ -214,20 +329,54 @@ export default function DashboardPage() {
           <Card className="p-6">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Activity</h3>
             <div className="space-y-3">
-              <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <div className="w-2 h-2 bg-primary-500 rounded-full"></div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-900 dark:text-white">Grup "Netflix Squad" dibuat</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">2 jam yang lalu</p>
+              {loadingTransactions || loadingGroups ? (
+                <div className="flex items-center justify-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
                 </div>
-              </div>
-              <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <div className="w-2 h-2 bg-success-500 rounded-full"></div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-900 dark:text-white">Pembayaran Spotify berhasil</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">1 hari yang lalu</p>
+              ) : !loadingTransactions && !loadingGroups && generateRecentActivities().length > 0 ? (
+                generateRecentActivities().map((activity) => {
+                  const timeAgo = new Date(activity.timestamp)
+                  const now = new Date()
+                  const diffInHours = Math.floor((now.getTime() - timeAgo.getTime()) / (1000 * 60 * 60))
+                  const diffInDays = Math.floor(diffInHours / 24)
+                  
+                  let timeText = ''
+                  if (diffInHours < 1) {
+                    timeText = 'Baru saja'
+                  } else if (diffInHours < 24) {
+                    timeText = `${diffInHours} jam yang lalu`
+                  } else if (diffInDays < 7) {
+                    timeText = `${diffInDays} hari yang lalu`
+                  } else {
+                    timeText = timeAgo.toLocaleDateString('id-ID')
+                  }
+
+                  const getIconColor = () => {
+                    switch (activity.icon) {
+                      case 'success': return 'bg-emerald-500'
+                      case 'warning': return 'bg-yellow-500'
+                      case 'error': return 'bg-red-500'
+                      case 'primary': return 'bg-blue-500'
+                      default: return 'bg-gray-500'
+                    }
+                  }
+
+                  return (
+                    <div key={activity.id} className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                      <div className={`w-2 h-2 ${getIconColor()} rounded-full`}></div>
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-900 dark:text-white">{activity.title}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{activity.description}</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{timeText}</p>
+                      </div>
+                    </div>
+                  )
+                })
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Belum ada aktivitas terbaru</p>
                 </div>
-              </div>
+              )}
             </div>
           </Card>
         </motion.div>

@@ -19,11 +19,16 @@ import {
   ChevronDown,
   Mail,
   Shield,
-  Smartphone
+  Smartphone,
+  Megaphone,
+  MessageCircle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { generateAvatarUrl } from '@/lib/utils'
 import ThemeToggle from '@/components/ThemeToggle'
+import NotificationDropdown from '@/components/NotificationDropdown'
+import { chatAPI } from '@/lib/api'
+import toast from 'react-hot-toast'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -42,18 +47,24 @@ const adminNavigation = [
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Groups', href: '/admin/groups', icon: Users },
   { name: 'Apps', href: '/admin/apps', icon: Smartphone },
+  { name: 'Chat', href: '/admin/chat', icon: MessageCircle },
+  { name: 'User Broadcast', href: '/admin/user-broadcast', icon: Megaphone },
+  { name: 'Group Broadcast', href: '/admin/group-broadcast', icon: Megaphone },
+  { name: 'Subscriptions', href: '/admin/subscriptions', icon: CreditCard },
   { name: 'Email Submissions', href: '/admin/email-submissions', icon: Mail },
 ]
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [hasUnreadChats, setHasUnreadChats] = useState(false)
   const { user, logout } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
 
   const handleLogout = () => {
     logout()
+    toast.success('Berhasil logout!')
   }
 
   // Close profile menu when sidebar is closed
@@ -76,13 +87,52 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }
 
     if (profileMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
+      // Add delay to prevent immediate closing
+      setTimeout(() => {
+        document.addEventListener('mousedown', handleClickOutside)
+      }, 100)
     }
     
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [profileMenuOpen])
+
+  // Fetch chat status for admin users
+  useEffect(() => {
+    const fetchChatStatus = async () => {
+      if (user?.is_admin) {
+        try {
+          const response = await chatAPI.getAllChats()
+          const chats = response.data.chats || []
+          const hasUnread = chats.some((chat: any) => !chat.is_read)
+          setHasUnreadChats(hasUnread)
+        } catch (error) {
+          console.error('Failed to fetch chat status:', error)
+        }
+      }
+    }
+
+    if (user?.is_admin) {
+      fetchChatStatus()
+    }
+    
+    // Refresh chat status every 30 seconds
+    // const interval = setInterval(fetchChatStatus, 30000)
+    // return () => clearInterval(interval)
+  }, [user?.is_admin]) // Only depend on is_admin, not entire user object
+
+  // Listen for chat status updates from admin chat page
+  useEffect(() => {
+    const handleChatStatusUpdate = (event: CustomEvent) => {
+      setHasUnreadChats(event.detail.hasUnread)
+    }
+
+    window.addEventListener('chatStatusUpdated', handleChatStatusUpdate as EventListener)
+    return () => {
+      window.removeEventListener('chatStatusUpdated', handleChatStatusUpdate as EventListener)
+    }
+  }, [])
 
   return (
     <VerificationGuard>
@@ -151,12 +201,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 </div>
                 {adminNavigation.map((item) => {
                   const isActive = pathname === item.href
+                  const showBadge = item.name === 'Chat' && hasUnreadChats
                   return (
                     <Button
                       key={item.name}
                       variant={isActive ? 'primary' : 'ghost'}
                       className={cn(
-                        'w-full justify-start',
+                        'w-full justify-start relative',
                         isActive ? 'bg-primary-50 dark:bg-primary-900 text-primary-700 dark:text-primary-300' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700'
                       )}
                       onClick={() => {
@@ -166,6 +217,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     >
                       <item.icon className="mr-3 h-5 w-5" />
                       {item.name}
+                      {showBadge && (
+                        <div className="ml-auto w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                      )}
                     </Button>
                   )
                 })}
@@ -181,8 +235,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 onClick={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
-                  console.log('Mobile profile button clicked, current state:', profileMenuOpen)
-                  setProfileMenuOpen(!profileMenuOpen)
+                  setProfileMenuOpen(prev => !prev)
                 }}
               >
                 <div className="w-8 h-8 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center">
@@ -203,10 +256,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
               {profileMenuOpen && (
                 <div className="absolute bottom-full left-0 right-0 mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg" style={{zIndex: 9999}}>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700"
-                    onClick={() => {
+                  <div
+                    className="w-full flex items-center px-3 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer rounded-md"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
                       router.push('/profile')
                       setProfileMenuOpen(false)
                       setSidebarOpen(false)
@@ -214,11 +268,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   >
                     <User className="mr-3 h-4 w-4" />
                     Profil
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900"
-                    onClick={() => {
+                  </div>
+                  <div
+                    className="w-full flex items-center px-3 py-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900 cursor-pointer rounded-md"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
                       handleLogout()
                       setProfileMenuOpen(false)
                       setSidebarOpen(false)
@@ -226,7 +281,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   >
                     <LogOut className="mr-3 h-4 w-4" />
                     Keluar
-                  </Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -278,18 +333,22 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 </div>
                 {adminNavigation.map((item) => {
                   const isActive = pathname === item.href
+                  const showBadge = item.name === 'Chat' && hasUnreadChats
                   return (
                     <Button
                       key={item.name}
                       variant={isActive ? 'primary' : 'ghost'}
                       className={cn(
-                        'w-full justify-start px-3',
+                        'w-full justify-start px-3 relative',
                         isActive ? 'bg-primary-50 dark:bg-primary-900 text-primary-700 dark:text-primary-300' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700'
                       )}
                       onClick={() => router.push(item.href)}
                     >
                       <item.icon className="h-5 w-5 mr-3" />
                       {item.name}
+                      {showBadge && (
+                        <div className="ml-auto w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                      )}
                     </Button>
                   )
                 })}
@@ -303,8 +362,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 onClick={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
-                  console.log('Desktop profile button clicked, current state:', profileMenuOpen)
-                  setProfileMenuOpen(!profileMenuOpen)
+                  setProfileMenuOpen(prev => !prev)
                 }}
               >
                 <div className="w-8 h-8 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center">
@@ -324,29 +382,36 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </div>
 
               {profileMenuOpen && (
-                <div className="absolute bottom-full left-0 right-0 mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700"
-                    onClick={() => {
+                <div 
+                  className="absolute bottom-full left-0 right-0 mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg" 
+                  style={{zIndex: 9999}}
+                >
+                  <button
+                    type="button"
+                    className="w-full flex items-center px-3 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer rounded-md"
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
                       router.push('/profile')
                       setProfileMenuOpen(false)
                     }}
                   >
                     <User className="mr-3 h-4 w-4" />
                     Profil
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900"
-                    onClick={() => {
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full flex items-center px-3 py-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900 cursor-pointer rounded-md"
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
                       handleLogout()
                       setProfileMenuOpen(false)
                     }}
                   >
                     <LogOut className="mr-3 h-4 w-4" />
                     Keluar
-                  </Button>
+                  </button>
                 </div>
               )}
             </div>
@@ -382,9 +447,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
             <div className="flex items-center gap-x-4 lg:gap-x-6">
               <ThemeToggle />
-              <Button variant="ghost" size="sm" title="Notifications">
-                <Bell className="h-5 w-5" />
-              </Button>
+              <NotificationDropdown userId={user?.id} />
             </div>
           </div>
         </div>

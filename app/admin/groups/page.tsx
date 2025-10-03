@@ -24,7 +24,8 @@ import {
   Plus,
   Edit,
   Trash2,
-  Save
+  Save,
+  ExternalLink
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useAuth } from '@/contexts/AuthContext'
@@ -58,7 +59,7 @@ interface GroupStats {
   pending: number
   closed: number
   full: number
-  paid: number
+  group_paid: number
   public: number
   private: number
   total_revenue: number
@@ -74,7 +75,7 @@ export default function AdminGroupsPage() {
     pending: 0,
     closed: 0,
     full: 0,
-    paid: 0,
+    group_paid: 0,
     public: 0,
     private: 0,
     total_revenue: 0
@@ -119,36 +120,47 @@ export default function AdminGroupsPage() {
 
   // Redirect to homepage if not admin
   useEffect(() => {
-    if (!authLoading && (!user || (user.role !== 'admin' && !user.is_admin))) {
-      router.push('/')
+    if (!authLoading && (!user || !user.is_admin)) {
+      router.push('/dashboard')
     }
   }, [user, authLoading, router])
 
-  // Fetch groups when user is loaded
+  // Fetch groups when user is loaded or filters change
   useEffect(() => {
-    if ((user?.role === 'admin' || user?.is_admin) && !groupsFetched.current) {
-      groupsFetched.current = true
-      initialLoad.current = false
-      fetchGroups()
+    if (user?.is_admin) {
+      if (!groupsFetched.current) {
+        // Initial load
+        groupsFetched.current = true
+        initialLoad.current = false
+        fetchGroups()
+      } else if (!initialLoad.current) {
+        // Filter change - use debounce
+        const timeoutId = setTimeout(() => {
+          fetchGroups()
+        }, 300)
+        return () => clearTimeout(timeoutId)
+      }
     }
-  }, [user?.id]) // Use user.id instead of user object to prevent re-renders
-
-  // Refetch when filters change (but not on initial load)
-  useEffect(() => {
-    if (groupsFetched.current && !initialLoad.current) {
-      fetchGroups()
-    }
-  }, [statusFilter, searchTerm])
+  }, [user?.id, statusFilter, searchTerm])
 
   const fetchGroups = async () => {
     try {
       setLoading(true)
+      console.log('Fetching groups with params:', {
+        page: 1,
+        page_size: 100,
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        search: searchTerm || undefined
+      })
+      
       const response = await adminAPI.getGroups({
         page: 1,
         page_size: 100,
         status: statusFilter === 'all' ? undefined : statusFilter,
         search: searchTerm || undefined
       })
+      
+      console.log('Groups API response:', response.data)
       
       setGroups(response.data.data || [])
       setStats(response.data.stats || {
@@ -157,13 +169,14 @@ export default function AdminGroupsPage() {
         pending: 0,
         closed: 0,
         full: 0,
-        paid: 0,
+        group_paid: 0,
         public: 0,
         private: 0,
         total_revenue: 0
       })
     } catch (error) {
       console.error('Error fetching groups:', error)
+      console.error('Error details:', (error as any).response?.data)
       toast.error('Gagal memuat data groups')
       setGroups([])
       setStats({
@@ -172,7 +185,7 @@ export default function AdminGroupsPage() {
         pending: 0,
         closed: 0,
         full: 0,
-        paid: 0,
+        group_paid: 0,
         public: 0,
         private: 0,
         total_revenue: 0
@@ -189,7 +202,15 @@ export default function AdminGroupsPage() {
       (group.app_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (group.owner_name || '').toLowerCase().includes(searchTerm.toLowerCase())
     
-    const matchesStatus = statusFilter === 'all' || group.group_status === statusFilter
+    let matchesStatus = true
+    if (statusFilter === 'all') {
+      matchesStatus = true
+    } else if (statusFilter === 'private') {
+      // Private groups are those with is_public = false
+      matchesStatus = !group.is_public
+    } else {
+      matchesStatus = group.group_status === statusFilter
+    }
     
     return matchesSearch && matchesStatus
   })
@@ -202,7 +223,7 @@ export default function AdminGroupsPage() {
         'closed': 'closed',
         'private': 'private',
         'full': 'full',
-        'paid': 'paid_group'
+        'paid_group': 'paid_group'
       }
       
       const backendStatus = statusMapping[newStatus] || newStatus
@@ -233,8 +254,8 @@ export default function AdminGroupsPage() {
         } else if (newStatus === 'full') {
           updated.full += 1
           updated.active -= 1
-        } else if (newStatus === 'paid') {
-          updated.paid += 1
+        } else if (newStatus === 'paid_group') {
+          updated.group_paid += 1
           updated.active -= 1
         }
         return updated
@@ -355,7 +376,6 @@ export default function AdminGroupsPage() {
           total_revenue: 0
         }
         
-        console.log('Adding new group to state:', newGroup)
         setGroups(prev => [newGroup, ...prev])
         setStats(prev => ({
           ...prev,
@@ -554,16 +574,15 @@ export default function AdminGroupsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'open':
-        return <Badge variant="success" className="flex items-center space-x-1"><CheckCircle className="h-3 w-3" />Open</Badge>
+        return <Badge variant="primary" className="flex items-center space-x-1"><CheckCircle className="h-3 w-3" />Open</Badge>
       case 'private':
         return <Badge variant="warning" className="flex items-center space-x-1"><Clock className="h-3 w-3" />Private</Badge>
       case 'closed':
         return <Badge variant="error" className="flex items-center space-x-1"><XCircle className="h-3 w-3" />Closed</Badge>
       case 'full':
         return <Badge variant="warning" className="flex items-center space-x-1"><Users className="h-3 w-3" />Full</Badge>
-      case 'paid':
       case 'paid_group':
-        return <Badge variant="success" className="flex items-center space-x-1"><DollarSign className="h-3 w-3" />Paid</Badge>
+        return <Badge variant="success" className="flex items-center space-x-1"><DollarSign className="h-3 w-3" />Paid Group</Badge>
       default:
         return <Badge variant="gray">{status}</Badge>
     }
@@ -601,7 +620,7 @@ export default function AdminGroupsPage() {
   }
 
   // Show message if not admin
-  if (!user || (user.role !== 'admin' && !user.is_admin)) {
+  if (!user || !user.is_admin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
         <div className="text-center">
@@ -642,7 +661,7 @@ export default function AdminGroupsPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card className="p-6">
             <div className="flex items-center">
               <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
@@ -661,7 +680,7 @@ export default function AdminGroupsPage() {
                 <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Open</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Active</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.active}</p>
               </div>
             </div>
@@ -670,7 +689,19 @@ export default function AdminGroupsPage() {
           <Card className="p-6">
             <div className="flex items-center">
               <div className="p-2 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
-                <Users className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
+                <Clock className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Pending</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.pending}</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-orange-100 dark:bg-orange-900 rounded-lg">
+                <Users className="h-6 w-6 text-orange-600 dark:text-orange-400" />
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Full</p>
@@ -681,12 +712,12 @@ export default function AdminGroupsPage() {
 
           <Card className="p-6">
             <div className="flex items-center">
-              <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
-                <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+              <div className="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-lg">
+                <DollarSign className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Paid Groups</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.paid}</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Group Paid</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.group_paid}</p>
               </div>
             </div>
           </Card>
@@ -699,6 +730,30 @@ export default function AdminGroupsPage() {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Closed</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.closed}</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                <Globe className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Public</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.public}</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
+                <Lock className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Private</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.private}</p>
               </div>
             </div>
           </Card>
@@ -729,7 +784,7 @@ export default function AdminGroupsPage() {
                 <option value="private">Private</option>
                 <option value="closed">Closed</option>
                 <option value="full">Full</option>
-                <option value="paid">Paid</option>
+                <option value="paid_group">Paid Group</option>
               </select>
             </div>
           </div>
@@ -789,7 +844,7 @@ export default function AdminGroupsPage() {
                           <p>Owner: {group.owner_name} ({group.owner_email})</p>
                           <p>Members: {group.members_count}/{group.max_members}</p>
                           <p>Price: {formatCurrency(group.price_per_member)}/month</p>
-                          <p>Revenue: {formatCurrency(group.total_revenue)}</p>
+                          <p>Visibility: <span className="font-bold text-black dark:text-white">{group.is_public ? 'Public' : 'Private'}</span></p>
                           <p>Created: {formatDate(group.created_at)}</p>
                         </div>
                       </div>
@@ -816,6 +871,15 @@ export default function AdminGroupsPage() {
                         className="text-blue-600 hover:text-blue-700"
                       >
                         <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(`/groups/${group.id}`, '_blank')}
+                        className="text-green-600 hover:text-green-700"
+                        title="Inspect Group (Admin View)"
+                      >
+                        <ExternalLink className="h-4 w-4" />
                       </Button>
                       {/* <Button
                         variant="outline"
@@ -974,10 +1038,10 @@ export default function AdminGroupsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Total Revenue
+                    Visibility
                   </label>
-                  <p className="text-sm text-gray-900 dark:text-white">
-                    {formatCurrency(selectedGroup.total_revenue)}
+                  <p className="text-sm text-gray-900 dark:text-white font-bold">
+                    {selectedGroup.is_public ? 'Public' : 'Private'}
                   </p>
                 </div>
               </div>
@@ -1246,43 +1310,27 @@ export default function AdminGroupsPage() {
                   />
                   <span className="text-sm text-gray-700 dark:text-gray-300">Grup Publik</span>
                 </label>
+                <div className="text-sm font-bold text-black dark:text-white">
+                  {groupForm.is_public ? 'Public' : 'Private'}
+                </div>
               </div>
 
               {editingGroup && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Status
-                    </label>
-                    <select
-                      value={groupForm.group_status}
-                      onChange={(e) => setGroupForm(prev => ({ ...prev, group_status: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-gray-700 dark:text-white"
-                    >
-                      <option value="open">Open</option>
-                      <option value="private">Private</option>
-                      <option value="full">Full</option>
-                      <option value="paid_group">Paid Group</option>
-                      <option value="closed">Closed</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Group Status
-                    </label>
-                    <select
-                      value={groupForm.group_status}
-                      onChange={(e) => setGroupForm(prev => ({ ...prev, group_status: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-gray-700 dark:text-white"
-                    >
-                      <option value="open">Open</option>
-                      <option value="private">Private</option>
-                      <option value="full">Full</option>
-                      <option value="paid_group">Paid Group</option>
-                      <option value="closed">Closed</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Group Status
+                  </label>
+                  <select
+                    value={groupForm.group_status}
+                    onChange={(e) => setGroupForm(prev => ({ ...prev, group_status: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="open">Open</option>
+                    <option value="private">Private</option>
+                    <option value="full">Full</option>
+                    <option value="paid_group">Paid Group</option>
+                    <option value="closed">Closed</option>
+                  </select>
                 </div>
               )}
             </div>

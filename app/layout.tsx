@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ConfettiProvider } from '@/contexts/ConfettiContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
+import ChatWidget from '@/components/ChatWidget'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -136,6 +137,7 @@ export default function RootLayout({
           <AuthProvider>
             <ConfettiProvider>
               {children}
+              <ChatWidget />
               <Toaster 
                 position="top-right"
                 toastOptions={{

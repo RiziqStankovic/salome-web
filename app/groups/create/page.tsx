@@ -29,7 +29,7 @@ interface App {
   category: string
   icon_url: string
   website_url?: string
-  total_members: number
+  max_group_members: number
   total_price: number
   price_per_user: number
   admin_fee_percentage: number
@@ -47,6 +47,15 @@ export default function CreateGroupPage() {
   const [selectedCategory, setSelectedCategory] = useState('')
   const [categories, setCategories] = useState<string[]>([])
   const [loadingApps, setLoadingApps] = useState(true)
+  const [groupLimit, setGroupLimit] = useState<{
+    is_admin: boolean
+    limit: number
+    current: number
+    remaining: number
+    can_create: boolean
+    reset_date?: string
+  } | null>(null)
+  const [loadingLimit, setLoadingLimit] = useState(true)
 
   const { register, handleSubmit, formState: { errors }, watch, setValue } = useForm<CreateGroupForm>({
     defaultValues: {
@@ -66,6 +75,7 @@ export default function CreateGroupPage() {
 
   useEffect(() => {
     fetchApps()
+    fetchGroupLimit()
   }, [])
 
   useEffect(() => {
@@ -73,8 +83,8 @@ export default function CreateGroupPage() {
       const app = apps.find(a => a.id === appId)
       if (app) {
         setSelectedApp(app)
-        // Set max_members to app's total_members (fixed, cannot be changed)
-        setValue('max_members', app.total_members)
+        // Set max_members to app's max_group_members (fixed, cannot be changed)
+        setValue('max_members', app.max_group_members)
       }
     }
   }, [appId, apps, setValue])
@@ -95,6 +105,26 @@ export default function CreateGroupPage() {
       toast.error('Gagal memuat daftar aplikasi')
     } finally {
       setLoadingApps(false)
+    }
+  }
+
+  const fetchGroupLimit = async () => {
+    try {
+      setLoadingLimit(true)
+      const response = await groupAPI.getGroupCreationLimit()
+      setGroupLimit(response.data)
+    } catch (error) {
+      console.error('Error fetching group limit:', error)
+      // Don't show error toast for this, just set default values
+      setGroupLimit({
+        is_admin: false,
+        limit: 3,
+        current: 0,
+        remaining: 3,
+        can_create: true
+      })
+    } finally {
+      setLoadingLimit(false)
     }
   }
 
@@ -128,6 +158,12 @@ export default function CreateGroupPage() {
       } else if (error.response?.data?.error === 'Authorization header required') {
         toast.error('Anda belum login. Silakan daftar atau login terlebih dahulu.')
         router.push('/?redirect=' + encodeURIComponent(window.location.pathname))
+      } else if (error.response?.status === 429) {
+        // Handle rate limit error
+        const errorData = error.response?.data
+        toast.error(errorData?.error || 'Anda telah mencapai batas maksimal pembuatan grup')
+        // Refresh limit info
+        fetchGroupLimit()
       } else {
         toast.error(error.response?.data?.error || 'Gagal membuat grup')
       }
@@ -166,10 +202,54 @@ export default function CreateGroupPage() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Buat Grup Baru</h1>
-            <p className="text-gray-600 mt-1">Buat grup untuk patungan subscription bersama teman-teman</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Buat Grup Baru</h1>
+            <p className="text-gray-600 dark:text-gray-300 mt-1">Buat grup untuk patungan subscription bersama teman-teman</p>
           </div>
         </div>
+
+        {/* Group Limit Info */}
+        {groupLimit && !groupLimit.is_admin && (
+          <Card className="p-4 mb-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2">
+                  <Users className="h-5 w-5 text-primary-600" />
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    Limit Pembuatan Grup
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    {groupLimit.current}/{groupLimit.limit} grup dibuat
+                  </span>
+                  <div className="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div 
+                      className="bg-primary-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(groupLimit.current / groupLimit.limit) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  {groupLimit.remaining} tersisa
+                </span>
+                {groupLimit.reset_date && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Reset: {new Date(groupLimit.reset_date).toLocaleDateString('id-ID')}
+                  </p>
+                )}
+              </div>
+            </div>
+            {!groupLimit.can_create && (
+              <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                  Anda telah mencapai batas maksimal pembuatan grup. Silakan tunggu hingga bulan berikutnya.
+                </p>
+              </div>
+            )}
+          </Card>
+        )}
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Form */}
@@ -183,7 +263,7 @@ export default function CreateGroupPage() {
                     {/* Search and Filter */}
                     <div className="flex gap-2">
                       <div className="flex-1 relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 h-4 w-4" />
                         <Input
                           type="text"
                           placeholder="Cari aplikasi..."
@@ -263,7 +343,7 @@ export default function CreateGroupPage() {
                     {...register('app_id', { validate: validateAppId })}
                   />
                   {errors.app_id && (
-                    <p className="text-red-500 text-sm mt-1">{errors.app_id.message}</p>
+                    <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.app_id.message}</p>
                   )}
                 </div>
 
@@ -292,7 +372,7 @@ export default function CreateGroupPage() {
                   <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
                     <div className="flex items-center justify-between">
                       <span className="text-gray-900 dark:text-white font-medium">
-                        {selectedApp ? `${selectedApp.total_members} anggota` : 'Pilih aplikasi terlebih dahulu'}
+                        {selectedApp ? `${selectedApp.max_group_members} anggota` : 'Pilih aplikasi terlebih dahulu'}
                       </span>
                       <span className="text-sm text-gray-500 dark:text-gray-400">
                         {selectedApp ? `Untuk ${selectedApp.name}` : ''}
@@ -306,7 +386,7 @@ export default function CreateGroupPage() {
                     type="hidden"
                     {...register('max_members', { 
                       required: 'Maksimal anggota wajib diisi',
-                      value: selectedApp?.total_members || 4
+                      value: selectedApp?.max_group_members || 4
                     })}
                   />
                 </div>
@@ -321,14 +401,14 @@ export default function CreateGroupPage() {
                         id="public"
                         value="true"
                         {...register('is_public')}
-                        className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 focus:ring-primary-500"
+                        className="w-4 h-4 text-primary-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-primary-500"
                       />
                       <label htmlFor="public" className="flex-1 cursor-pointer">
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="flex items-center space-x-2">
                               <span className="font-medium text-gray-900 dark:text-white">Public</span>
-                              <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">Direkomendasikan</span>
+                              <span className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-full">Direkomendasikan</span>
                             </div>
                             <p className="text-sm text-gray-600 dark:text-gray-300">
                               Grup akan muncul di halaman "Join Group" dan dapat ditemukan oleh pengguna lain
@@ -344,14 +424,14 @@ export default function CreateGroupPage() {
                         id="private"
                         value="false"
                         {...register('is_public')}
-                        className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 focus:ring-primary-500"
+                        className="w-4 h-4 text-primary-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-primary-500"
                       />
                       <label htmlFor="private" className="flex-1 cursor-pointer">
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="flex items-center space-x-2">
                               <span className="font-medium text-gray-900 dark:text-white">Private</span>
-                              <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">Eksklusif</span>
+                              <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full">Eksklusif</span>
                             </div>
                             <p className="text-sm text-gray-600 dark:text-gray-300">
                               Grup hanya dapat diakses melalui kode undangan yang Anda bagikan
@@ -378,12 +458,12 @@ export default function CreateGroupPage() {
                 </div>
 
                 {/* Info Card */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                   <div className="flex items-start space-x-3">
-                    <Info className="h-5 w-5 text-blue-600 mt-0.5" />
-                    <div className="text-sm text-blue-800">
+                    <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                    <div className="text-sm text-blue-800 dark:text-blue-200">
                       <p className="font-medium mb-1">Tips membuat grup yang baik:</p>
-                      <ul className="list-disc list-inside space-y-1 text-blue-700">
+                      <ul className="list-disc list-inside space-y-1 text-blue-700 dark:text-blue-300">
                         <li>Gunakan nama yang mudah diingat dan deskriptif</li>
                         <li>Atur jumlah anggota sesuai kebutuhan subscription</li>
                         <li>Bagikan kode undangan hanya kepada orang yang dipercaya</li>
@@ -404,11 +484,12 @@ export default function CreateGroupPage() {
                   </Button>
                   <Button
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || (groupLimit ? !groupLimit.can_create : false)}
                     loading={loading}
                     className="flex-1"
                   >
-                    {loading ? 'Membuat...' : 'Buat Grup'}
+                    {loading ? 'Membuat...' : 
+                     (groupLimit && !groupLimit.can_create) ? 'Limit Tercapai' : 'Buat Grup'}
                   </Button>
                 </div>
               </form>
@@ -445,7 +526,7 @@ export default function CreateGroupPage() {
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-300">Maksimal Anggota</p>
                   <p className="font-medium text-gray-900 dark:text-white">
-                    {selectedApp?.total_members || maxMembers} anggota
+                    {selectedApp?.max_group_members || maxMembers} anggota
                   </p>
                 </div>
                 <div>
@@ -498,10 +579,10 @@ export default function CreateGroupPage() {
                   <div className="flex items-start space-x-3">
                     {feature.icon}
                     <div>
-                      <h4 className="font-medium text-gray-900 mb-1">
+                      <h4 className="font-medium text-gray-900 dark:text-white mb-1">
                         {feature.title}
                       </h4>
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
                         {feature.description}
                       </p>
                     </div>
@@ -510,15 +591,30 @@ export default function CreateGroupPage() {
               ))}
             </div>
 
+            {/* Admin Info */}
+            {groupLimit && groupLimit.is_admin && (
+              <Card className="p-6 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20">
+                <div className="text-center">
+                  <Shield className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                    Admin Privilege
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    Anda dapat membuat grup tanpa batas sebagai admin.
+                  </p>
+                </div>
+              </Card>
+            )}
+
             {/* Quick Stats */}
-            <Card className="p-6 bg-gradient-to-r from-primary-50 to-secondary-50">
+            <Card className="p-6 bg-gradient-to-r from-primary-50 to-secondary-50 dark:from-primary-900/20 dark:to-secondary-900/20">
               <div className="text-center">
                 <Zap className="h-8 w-8 text-primary-600 mx-auto mb-2" />
-                <h3 className="font-semibold text-gray-900 mb-1">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
                   Mulai Hemat Sekarang
                 </h3>
-                <p className="text-sm text-gray-600">
-                  Dengan {selectedApp?.total_members || maxMembers} anggota, Anda bisa berbagi biaya subscription dengan teman-teman.
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Dengan {selectedApp?.max_group_members || maxMembers} anggota, Anda bisa berbagi biaya subscription dengan teman-teman.
                 </p>
               </div>
             </Card>

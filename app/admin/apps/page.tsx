@@ -88,14 +88,20 @@ export default function AdminAppsPage() {
 
   // Redirect to homepage if not admin
   useEffect(() => {
-    if (!authLoading && (!user || (user.role !== 'admin' && !user.is_admin))) {
+    console.log('Admin Apps - Auth Check:', { 
+      authLoading, 
+      user: user ? { id: user.id, email: user.email, is_admin: user.is_admin, role: user.role } : null 
+    })
+    
+    if (!authLoading && (!user || !user.is_admin)) {
+      console.log('Admin Apps - Redirecting to homepage because:', { user: !!user, is_admin: user?.is_admin })
       router.push('/')
     }
   }, [user, authLoading, router])
 
   // Fetch apps only once when user is loaded
   useEffect(() => {
-    if ((user?.role === 'admin' || user?.is_admin) && !appsFetched.current) {
+    if (user?.is_admin && !appsFetched.current) {
       appsFetched.current = true
       fetchApps()
     }
@@ -140,7 +146,6 @@ export default function AdminAppsPage() {
   const filteredApps = (apps || []).filter(app => {
     // Skip apps that don't have required fields
     if (!app || !app.name) {
-      console.log('Filtering out app without name:', app)
       return false
     }
     
@@ -155,7 +160,6 @@ export default function AdminAppsPage() {
     
     const shouldInclude = matchesSearch && matchesStatus
     if (!shouldInclude) {
-      console.log('Filtering out app:', app.name, 'matchesSearch:', matchesSearch, 'matchesStatus:', matchesStatus)
     }
     
     return shouldInclude
@@ -307,18 +311,10 @@ export default function AdminAppsPage() {
           is_active: appForm.is_active
         })
         
-        console.log('Create app response:', response.data)
-        console.log('Current apps before adding:', apps.length)
         
         // Backend returns {data: app}, so we need response.data
         if (response.data) {
-          console.log('Adding new app to state:', response.data)
-          setApps(prev => {
-            console.log('Previous apps count:', prev.length)
-            const newApps = [response.data, ...prev]
-            console.log('New apps count:', newApps.length)
-            return newApps
-          })
+          setApps(prev => [response.data, ...prev])
         } else {
           console.error('No data in response:', response)
           toast.error('Gagal membuat app - data tidak valid')
@@ -423,7 +419,7 @@ export default function AdminAppsPage() {
   }
 
   // Show message if not admin
-  if (!user || (user.role !== 'admin' && !user.is_admin)) {
+  if (!user || !user.is_admin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
         <div className="text-center">
@@ -466,7 +462,7 @@ export default function AdminAppsPage() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="p-6">
+          <Card className="p-6 bg-white dark:bg-gray-800">
             <div className="flex items-center">
               <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
                 <Smartphone className="h-6 w-6 text-blue-600 dark:text-blue-400" />
@@ -478,7 +474,7 @@ export default function AdminAppsPage() {
             </div>
           </Card>
 
-          <Card className="p-6">
+          <Card className="p-6 bg-white dark:bg-gray-800">
             <div className="flex items-center">
               <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
                 <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
@@ -490,8 +486,7 @@ export default function AdminAppsPage() {
             </div>
           </Card>
 
-
-          <Card className="p-6">
+          <Card className="p-6 bg-white dark:bg-gray-800">
             <div className="flex items-center">
               <div className="p-2 bg-orange-100 dark:bg-orange-900 rounded-lg">
                 <DollarSign className="h-6 w-6 text-orange-600 dark:text-orange-400" />
@@ -505,7 +500,7 @@ export default function AdminAppsPage() {
         </div>
 
         {/* Filters */}
-        <Card className="p-6">
+        <Card className="p-6 bg-white dark:bg-gray-800">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
@@ -514,7 +509,7 @@ export default function AdminAppsPage() {
                   placeholder="Cari nama app, deskripsi, atau kategori..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 bg-white dark:bg-gray-700"
                 />
               </div>
             </div>
@@ -522,7 +517,7 @@ export default function AdminAppsPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="all">Semua Status</option>
                 <option value="active">Active</option>
@@ -533,7 +528,7 @@ export default function AdminAppsPage() {
         </Card>
 
         {/* Apps List */}
-        <Card className="p-6">
+        <Card className="p-6 bg-white dark:bg-gray-800">
           <div className="space-y-4">
             {loading ? (
               <div className="text-center py-8">
@@ -557,11 +552,11 @@ export default function AdminAppsPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3 }}
-                  className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow"
+                  className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow bg-white dark:bg-gray-800"
                 >
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                    <div className="flex items-center space-x-4 flex-1">
+                      <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0">
                         {app.icon_url ? (
                           <img 
                             src={app.icon_url} 
@@ -574,53 +569,72 @@ export default function AdminAppsPage() {
                           </span>
                         )}
                       </div>
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <h3 className="font-medium text-gray-900 dark:text-white">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <h3 className="font-semibold text-gray-900 dark:text-white text-lg">
                             {app.name}
                           </h3>
                           {getStatusBadge(app.is_active)}
                         </div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
-                          <p>Category: {app.category || 'N/A'}</p>
-                          <p>{app.description || 'No description'}</p>
-                          <p>Groups: {app.groups_count || 0} | Revenue: {formatCurrency(app.total_revenue || 0)}</p>
-                          <p>Total Price: {formatCurrency(app.total_price || 0)} | Max Members: {app.max_group_members || 0} | Admin Fee: {app.admin_fee_percentage || 0}%</p>
-                          <p>Avg Price: {formatCurrency(app.avg_price || 0)} | Updated: {formatDate(app.updated_at || new Date().toISOString())}</p>
+                        <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                          <span className="font-medium">Category:</span> {app.category || 'N/A'}
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                          {app.description || 'No description'}
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-500 dark:text-gray-400">
+                          <div>
+                            <span className="font-medium">Groups:</span> {app.groups_count || 0} | <span className="font-medium">Revenue:</span> {formatCurrency(app.total_revenue || 0)}
+                          </div>
+                          <div>
+                            <span className="font-medium">Total Price:</span> {formatCurrency(app.total_price || 0)} | <span className="font-medium">Max Members:</span> {app.max_group_members || 0}
+                          </div>
+                          <div>
+                            <span className="font-medium">Admin Fee:</span> {app.admin_fee_percentage || 0}% | <span className="font-medium">Avg Price:</span> {formatCurrency(app.avg_price || 0)}
+                          </div>
+                          <div>
+                            <span className="font-medium">Updated:</span> {formatDate(app.updated_at || new Date().toISOString())}
+                          </div>
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-1 ml-4">
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
                         onClick={() => {
                           setSelectedApp(app)
                           setShowDetailModal(true)
                         }}
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700"
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
                         onClick={() => handleEditApp(app)}
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700"
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
                         onClick={() => handleDeleteApp(app.id)}
-                        className="text-red-600 hover:text-red-700"
+                        className="p-2 hover:bg-red-100 dark:hover:bg-red-900 text-red-600 hover:text-red-700"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
                         onClick={() => handleStatusChange(app.id, 'is_active', !app.is_active)}
-                        className={app.is_active ? "text-red-600 hover:text-red-700" : "text-green-600 hover:text-green-700"}
+                        className={`p-2 ${
+                          app.is_active 
+                            ? "hover:bg-red-100 dark:hover:bg-red-900 text-red-600 hover:text-red-700" 
+                            : "hover:bg-green-100 dark:hover:bg-green-900 text-green-600 hover:text-green-700"
+                        }`}
                       >
                         {app.is_active ? <XCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
                       </Button>

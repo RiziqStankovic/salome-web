@@ -31,8 +31,8 @@ export const authAPI = {
   login: (email: string, password: string) => 
     api.post('/auth/login', { email, password }),
   
-  register: (email: string, password: string, fullName: string) => 
-    api.post('/auth/register', { email, password, full_name: fullName }),
+  register: (email: string, password: string, fullName: string, whatsappNumber: string) => 
+    api.post('/auth/register', { email, password, full_name: fullName, whatsapp_number: whatsappNumber }),
   
   getProfile: () => 
     api.get('/auth/profile'),
@@ -45,6 +45,108 @@ export const authAPI = {
   
   resetPassword: (email: string, newPassword: string, otpCode: string) => 
     api.put('/auth/reset-password', { email, new_password: newPassword, otp_code: otpCode }),
+  
+  getStats: () => 
+    api.get('/auth/stats'),
+  
+  changeEmail: (newEmail: string) => 
+    api.post('/auth/change-email', { new_email: newEmail }),
+  
+  verifyEmailChange: (otpCode: string) => 
+    api.post('/auth/verify-email-change', { otp_code: otpCode }),
+  
+  recalculateTotalSpent: () => 
+    api.post('/auth/recalculate-total-spent'),
+  
+  recalculateUserTotalSpent: () => 
+    api.post('/auth/recalculate-user-total-spent'),
+}
+
+export const chatAPI = {
+  createChat: (content: string, anonymousName?: string) =>
+    api.post('/chats', { content, anonymous_name: anonymousName }),
+  getUserChats: () =>
+    api.get('/user-chats'),
+  getChatMessages: (id: string) =>
+    api.get(`/chats/${id}/messages`),
+  sendMessage: (id: string, content: string) =>
+    api.post(`/chats/${id}/messages`, { content }),
+  
+  // Admin APIs
+  getAllChats: () =>
+    api.get('/admin/chats'),
+  sendMessageAsAdmin: (id: string, content: string) =>
+    api.post(`/admin/chats/${id}/messages`, { content }),
+  updateChatStatus: (id: string, status: string) =>
+    api.put(`/admin/chats/${id}/status`, { status }),
+  markChatAsRead: (id: string) =>
+    api.put(`/admin/chats/${id}/read`),
+  markChatAsUnread: (id: string) =>
+    api.put(`/admin/chats/${id}/unread`),
+  sendBroadcast: (content: string, userIDs?: string[]) =>
+    api.post('/admin/chats/broadcast', { content, user_ids: userIDs }),
+}
+
+export const userBroadcastAPI = {
+  // Get all user broadcasts with pagination and filters
+  getUserBroadcasts: (params?: {
+    page?: number
+    page_size?: number
+    status?: string
+    search?: string
+  }) => {
+    const searchParams = new URLSearchParams()
+    if (params?.page) searchParams.append('page', params.page.toString())
+    if (params?.page_size) searchParams.append('page_size', params.page_size.toString())
+    if (params?.status) searchParams.append('status', params.status)
+    if (params?.search) searchParams.append('search', params.search)
+    
+    const queryString = searchParams.toString()
+    return api.get(`/admin/user-broadcasts${queryString ? `?${queryString}` : ''}`)
+  },
+  
+  // Create new user broadcast
+  createUserBroadcast: (data: {
+    title: string
+    message: string
+    target_type: 'all' | 'selected'
+    priority: 'low' | 'normal' | 'high'
+    scheduled_at?: string
+    end_date?: string
+    user_ids?: string[]
+  }) =>
+    api.post('/admin/user-broadcasts', data),
+  
+  // Get single user broadcast
+  getUserBroadcast: (id: string) =>
+    api.get(`/admin/user-broadcasts/${id}`),
+  
+  // Update user broadcast
+  updateUserBroadcast: (id: string, data: {
+    title?: string
+    message?: string
+    target_type?: 'all' | 'selected'
+    priority?: 'low' | 'normal' | 'high'
+    scheduled_at?: string
+    end_date?: string
+    status?: 'draft' | 'scheduled' | 'sent' | 'cancelled'
+    user_ids?: string[]
+  }) =>
+    api.put(`/admin/user-broadcasts/${id}`, data),
+  
+  // Delete user broadcast
+  deleteUserBroadcast: (id: string) =>
+    api.delete(`/admin/user-broadcasts/${id}`),
+  
+  // Send user broadcast
+  sendUserBroadcast: (id: string) =>
+    api.post(`/admin/user-broadcasts/${id}/send`),
+}
+
+export const userBroadcastUserAPI = {
+  // Get broadcasts for user dashboard
+  getUserBroadcasts: () =>
+    api.get('/user-broadcasts'),
 }
 
 export const otpAPI = {
@@ -107,6 +209,9 @@ export const groupAPI = {
     new_owner_id: string
   }) => 
     api.put(`/groups/${groupId}/transfer-ownership`, data),
+  
+  getGroupCreationLimit: () => 
+    api.get('/groups/creation-limit'),
 }
 
 export const subscriptionAPI = {
@@ -307,6 +412,14 @@ export const adminAPI = {
   }) => 
     api.get('/admin/groups', { params }),
   
+  // Subscriptions management
+  getSubscriptions: (params?: {
+    page?: number
+    page_size?: number
+    search?: string
+  }) => 
+    api.get('/admin/subscriptions', { params }),
+  
   updateGroupStatus: (data: {
     group_id: string
     new_status: string
@@ -424,4 +537,81 @@ export const adminAPI = {
     app_id: string
   }) => 
     api.delete('/admin/apps', { data }),
+}
+
+// Notification API endpoints
+export const notificationAPI = {
+  getUserNotifications: (userId: string, params?: {
+    page?: number
+    page_size?: number
+    unread_only?: boolean
+  }) => {
+    const searchParams = new URLSearchParams()
+    if (params?.page) searchParams.append('page', params.page.toString())
+    if (params?.page_size) searchParams.append('page_size', params.page_size.toString())
+    if (params?.unread_only) searchParams.append('unread_only', params.unread_only.toString())
+    
+    const queryString = searchParams.toString()
+    return api.get(`/notifications/${userId}${queryString ? `?${queryString}` : ''}`)
+  },
+  
+  markAsRead: (notificationId: string) => 
+    api.put('/notifications/mark-read', { notification_id: notificationId }),
+  
+  markAllAsRead: (userId: string) => 
+    api.put(`/notifications/${userId}/mark-all-read`),
+  
+  createNotification: (data: {
+    user_id: string
+    type: string
+    title: string
+    message: string
+    action_url?: string
+    action_text?: string
+  }) => 
+    api.post('/notifications/create', data),
+}
+
+// Broadcast API endpoints
+export const broadcastAPI = {
+  getGroupBroadcast: (groupId: string) => 
+    api.get(`/broadcasts/groups/${groupId}`),
+  
+  createBroadcast: (data: {
+    title: string
+    message: string
+    target_type: 'all_groups' | 'selected_groups'
+    target_group_ids?: string[]
+    priority?: number
+    end_date?: string
+  }) => 
+    api.post('/broadcasts', data),
+  
+  getBroadcasts: (params?: {
+    page?: number
+    page_size?: number
+    active?: boolean
+  }) => {
+    const searchParams = new URLSearchParams()
+    if (params?.page) searchParams.append('page', params.page.toString())
+    if (params?.page_size) searchParams.append('page_size', params.page_size.toString())
+    if (params?.active !== undefined) searchParams.append('active', params.active.toString())
+    
+    const queryString = searchParams.toString()
+    return api.get(`/broadcasts${queryString ? `?${queryString}` : ''}`)
+  },
+  
+  updateBroadcast: (id: string, data: {
+    title?: string
+    message?: string
+    target_type?: 'all_groups' | 'selected_groups'
+    target_group_ids?: string[]
+    is_active?: boolean
+    priority?: number
+    end_date?: string
+  }) => 
+    api.put(`/broadcasts/${id}`, data),
+  
+  deleteBroadcast: (id: string) => 
+    api.delete(`/broadcasts/${id}`),
 }

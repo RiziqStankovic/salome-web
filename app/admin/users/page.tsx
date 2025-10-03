@@ -74,24 +74,21 @@ export default function AdminUsersPage() {
 
   // Redirect to homepage if not admin
   useEffect(() => {
-    if (!authLoading && (!user || (user.role !== 'admin' && !user.is_admin))) {
-      router.push('/')
+    if (!authLoading && (!user || !user.is_admin)) {
+      router.push('/dashboard')
     }
   }, [user, authLoading, router])
 
-  // Fetch users
+  // Fetch users when user is loaded or filters change
   useEffect(() => {
-    if (user?.role === 'admin' || user?.is_admin) {
-      fetchUsers()
+    if (user?.is_admin) {
+      // Use debounce for filter changes
+      const timeoutId = setTimeout(() => {
+        fetchUsers()
+      }, 300)
+      return () => clearTimeout(timeoutId)
     }
-  }, [user?.id]) // Use user.id instead of user object to prevent re-renders
-
-  // Refetch when filters change
-  useEffect(() => {
-    if (user?.role === 'admin' || user?.is_admin) {
-      fetchUsers()
-    }
-  }, [statusFilter, searchTerm])
+  }, [user?.id, statusFilter, searchTerm])
 
   const fetchUsers = async () => {
     try {
@@ -224,7 +221,7 @@ export default function AdminUsersPage() {
   }
 
   // Show message if not admin
-  if (!user || (user.role !== 'admin' && !user.is_admin)) {
+  if (!user || !user.is_admin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
         <div className="text-center">

@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  reactStrictMode: false, // Disable React Strict Mode to prevent double useEffect calls
   images: {
     domains: ['images.unsplash.com', 'ui-avatars.com'],
   },
@@ -14,6 +15,7 @@ const nextConfig = {
     NEXT_PUBLIC_CURRENCY_SYMBOL: process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || 'Rp',
     NEXT_PUBLIC_DEFAULT_THEME: process.env.NEXT_PUBLIC_DEFAULT_THEME || 'light',
     NEXT_PUBLIC_ENABLE_DARK_MODE: process.env.NEXT_PUBLIC_ENABLE_DARK_MODE || 'true',
+    NEXT_PUBLIC_CHAT_POLLING_INTERVAL: process.env.NEXT_PUBLIC_CHAT_POLLING_INTERVAL || '10000',
   },
 }
 

@@ -1,7 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
+import { createContext, useContext, useEffect, useState, useRef, ReactNode, useMemo, useCallback } from 'react'
 import Cookies from 'js-cookie'
 import { api, otpAPI } from '@/lib/api'
 
@@ -9,6 +8,7 @@ interface User {
   id: string
   email: string
   full_name: string
+  whatsapp_number?: string
   avatar_url?: string
   status: string
   balance?: number
@@ -23,7 +23,7 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (email: string, password: string, fullName: string) => Promise<void>
+  register: (email: string, password: string, fullName: string, whatsappNumber: string) => Promise<void>
   verifyOTP: (email: string, otp: string) => Promise<void>
   resendOTP: (email: string) => Promise<void>
   logout: () => void
@@ -37,25 +37,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
-  const router = useRouter()
   const hasFetched = useRef(false)
+  const isInitialized = useRef(false)
+  const isFetching = useRef(false)
+  
 
   useEffect(() => {
+    if (isInitialized.current) return
+    isInitialized.current = true
+    
     const token = Cookies.get('token')
-    if (token && !hasFetched.current) {
-      console.log('AuthContext: Fetching user profile')
+    
+    if (token && !hasFetched.current && !isFetching.current) {
       hasFetched.current = true
       fetchUser()
     } else if (!token) {
       setLoading(false)
     }
-  }, [])
+  }, []) // Only run once on mount
 
-  const fetchUser = async () => {
-    if (fetching) return
+  const fetchUser = useCallback(async () => {
+    if (isFetching.current) return
     
     try {
       setFetching(true)
+      isFetching.current = true
       const response = await api.get('/auth/profile')
       setUser(response.data.user)
     } catch (error) {
@@ -65,8 +71,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false)
       setFetching(false)
+      isFetching.current = false
     }
-  }
+  }, [])
 
   const login = async (email: string, password: string) => {
     try {
@@ -75,7 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       Cookies.set('token', token, { expires: 7 })
       setUser(user)
-      router.push('/dashboard')
+      // Remove router.push to prevent re-render
+      window.location.href = '/dashboard'
     } catch (error: any) {
       // Handle specific error cases
       if (error.response?.status === 401) {
@@ -90,12 +98,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const register = async (email: string, password: string, fullName: string) => {
+  const register = async (email: string, password: string, fullName: string, whatsappNumber: string) => {
     try {
       const response = await api.post('/auth/register', { 
         email, 
         password, 
-        full_name: fullName 
+        full_name: fullName,
+        whatsapp_number: whatsappNumber
       })
       const { token, user } = response.data
       
@@ -104,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       Cookies.set('token', token, { expires: 7 })
       setUser(user)
-      router.push('/verify-email')
+      window.location.href = '/verify-email'
     } catch (error: any) {
       throw new Error(error.response?.data?.error || 'Registration failed')
     }
@@ -117,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.data.valid) {
         // Refresh user data after successful verification
         await fetchUser()
-        router.push('/dashboard')
+        window.location.href = '/dashboard'
       } else {
         throw new Error(response.data.message || 'OTP verification failed')
       }
@@ -144,7 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const refreshUser = async () => {
-    if (fetching || !Cookies.get('token')) return
+    if (fetching || isFetching.current || !Cookies.get('token')) return
     await fetchUser()
   }
 
@@ -152,7 +161,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     Cookies.remove('token')
     setUser(null)
     hasFetched.current = false
-    router.push('/')
+    isInitialized.current = false
+    isFetching.current = false
+    // Remove router.push to prevent re-render
+    window.location.href = '/'
   }
 
   return (
@@ -177,5 +189,7 @@ export function useAuth() {
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider')
   }
+  
+  
   return context
 }

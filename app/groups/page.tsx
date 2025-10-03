@@ -60,21 +60,17 @@ export default function GroupsPage() {
   const [leavingGroupId, setLeavingGroupId] = useState<string | null>(null)
   const groupsFetched = useRef(false)
 
+  // Fetch groups when component mounts or filters change
   useEffect(() => {
     if (!groupsFetched.current) {
-      console.log('Groups: Fetching groups')
+      // Initial load
       groupsFetched.current = true
       fetchGroups()
-    }
-  }, [])
-
-  // Refetch when filters change (with debounce)
-  useEffect(() => {
-    if (groupsFetched.current) {
+    } else {
+      // Filter change - use debounce
       const timeoutId = setTimeout(() => {
         fetchGroups()
       }, 500) // Debounce search
-
       return () => clearTimeout(timeoutId)
     }
   }, [searchTerm, selectedCategory])
@@ -111,13 +107,19 @@ export default function GroupsPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'open':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
       case 'full':
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
       case 'active':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
+        return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
+      case 'paid_group':
+        return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300'
       case 'expired':
         return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+      case 'closed':
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
+      case 'private':
+        return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300'
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
     }
@@ -131,6 +133,8 @@ export default function GroupsPage() {
         return 'Full'
       case 'active':
         return 'Active'
+      case 'paid_group':
+        return 'Lunas'
       case 'expired':
         return 'Expired'
       default:

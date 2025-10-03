@@ -237,7 +237,7 @@ export default function PaymentsPage() {
             </p>
             {!searchTerm && statusFilter === 'all' && (
               <Button onClick={() => router.push('/groups')}>
-                Lihat Grup
+                Join Grup
               </Button>
             )}
           </Card>
