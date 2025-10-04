@@ -37,7 +37,7 @@ export default function KontakPage() {
               Email
             </h3>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
-              support@salome.id
+              support@salome.cloudfren.id
             </p>
             <Button variant="outline" className="w-full">
               Kirim Email

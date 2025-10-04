@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/Button'
@@ -37,6 +37,8 @@ import {
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { appAPI, otpAPI, authAPI } from '@/lib/api'
+import { cache, CACHE_KEYS } from '@/lib/cache'
+import { debounce } from '@/lib/debounce'
 import { formatCurrency } from '@/lib/utils'
 
 export default function LandingPage() {
@@ -64,11 +66,12 @@ export default function LandingPage() {
   const [otpResendCooldown, setOtpResendCooldown] = useState(0) // in seconds
   
   const [otpAttempts, setOtpAttempts] = useState(0) // track OTP attempts
-  const [apps, setApps] = useState([])
-  const [categories, setCategories] = useState([])
+  const [apps, setApps] = useState<any[]>([])
+  const [categories, setCategories] = useState<any[]>([])
   const [loadingApps, setLoadingApps] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
+  const [whatsappError, setWhatsappError] = useState('')
   const { user, login, register, logout } = useAuth()
   const router = useRouter()
   const appsFetched = useRef(false)
@@ -81,6 +84,14 @@ export default function LandingPage() {
     
     setLoading(true)
     setError('') // Clear previous error
+    setWhatsappError('') // Clear WhatsApp error
+
+    // Validate WhatsApp number if not empty
+    if (!isLogin && formData.whatsappNumber && !validateWhatsappNumber(formData.whatsappNumber)) {
+      setWhatsappError('Nomor WhatsApp harus dimulai dengan 08 dan minimal 10 digit')
+      setLoading(false)
+      return
+    }
 
     try {
       if (isLogin) {
@@ -105,23 +116,23 @@ export default function LandingPage() {
     }
   }
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData({ ...formData, [field]: value })
+  const handleInputChange = useCallback((field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
     if (error) {
       setError('') // Clear error when user starts typing
     }
-  }
+  }, [error])
 
-  const toggleAuthMode = () => {
+  const toggleAuthMode = useCallback(() => {
     setIsLogin(!isLogin)
     setError('') // Clear error when switching between login/register
     setFormData({ email: '', password: '', fullName: '', whatsappNumber: '' }) // Clear form data
     setShowPassword(false) // Reset password visibility
-  }
+  }, [isLogin])
 
-  const togglePasswordVisibility = () => {
+  const togglePasswordVisibility = useCallback(() => {
     setShowPassword(!showPassword)
-  }
+  }, [showPassword])
 
   // Forgot password functions
   const handleForgotPasswordEmail = async () => {
@@ -261,6 +272,71 @@ export default function LandingPage() {
     }
   }, [otpResendCooldown])
 
+  const fetchApps = useCallback(async () => {
+    try {
+      setLoadingApps(true)
+      
+      // Create cache key based on search parameters
+      const cacheKey = `${CACHE_KEYS.APPS_LIST}_${searchTerm || 'default'}_${selectedCategory || 'all'}`
+      
+      // Check cache first
+      const cachedApps = cache.get<any[]>(cacheKey)
+      if (cachedApps) {
+        setApps(cachedApps)
+        setLoadingApps(false)
+        return
+      }
+      
+      const response = await appAPI.getApps({
+        page: 1,
+        page_size: 12,
+        popular: true,
+        q: searchTerm || undefined,
+        category: selectedCategory || undefined
+      })
+      
+      const appsData = response.data.apps
+      setApps(appsData)
+      
+      // Cache for 2 minutes
+      cache.set(cacheKey, appsData, 2 * 60 * 1000)
+    } catch (error) {
+      console.error('Failed to fetch apps:', error)
+    } finally {
+      setLoadingApps(false)
+    }
+  }, [searchTerm, selectedCategory])
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      // Check cache first
+      const cachedCategories = cache.get<any[]>(CACHE_KEYS.CATEGORIES)
+      if (cachedCategories) {
+        setCategories(cachedCategories)
+        return
+      }
+      
+      const response = await appAPI.getAppCategories()
+      const categoriesData = response.data.categories
+      setCategories(categoriesData)
+      
+      // Cache for 10 minutes (categories don't change often)
+      cache.set(CACHE_KEYS.CATEGORIES, categoriesData, 10 * 60 * 1000)
+    } catch (error) {
+      console.error('Failed to fetch categories:', error)
+    }
+  }, [])
+
+  // Debounced search function
+  const debouncedFetchApps = useMemo(
+    () => debounce(() => {
+      if (appsFetched.current) {
+        fetchApps()
+      }
+    }, 500),
+    [] // Remove fetchApps dependency to avoid circular dependency
+  )
+
   // Fetch apps and categories only once on mount
   useEffect(() => {
     if (!appsFetched.current) {
@@ -271,56 +347,107 @@ export default function LandingPage() {
       categoriesFetched.current = true
       fetchCategories()
     }
-  }, [])
+  }, []) // Remove dependencies to avoid circular dependency
 
   // Refetch apps when search or category changes (with debounce)
   useEffect(() => {
     if (appsFetched.current && (searchTerm || selectedCategory)) {
-      const timeoutId = setTimeout(() => {
-        fetchApps()
-      }, 500) // Debounce search
-
-      return () => clearTimeout(timeoutId)
+      debouncedFetchApps()
     }
-  }, [searchTerm, selectedCategory])
+  }, [searchTerm, selectedCategory, debouncedFetchApps])
 
-
-  const fetchApps = async () => {
-    try {
-      setLoadingApps(true)
-      const response = await appAPI.getApps({
-        page: 1,
-        page_size: 12,
-        popular: true,
-        q: searchTerm || undefined,
-        category: selectedCategory || undefined
-      })
-      setApps(response.data.apps)
-    } catch (error) {
-      console.error('Failed to fetch apps:', error)
-    } finally {
-      setLoadingApps(false)
-    }
-  }
-
-  const fetchCategories = async () => {
-    try {
-      const response = await appAPI.getAppCategories()
-      setCategories(response.data.categories)
-    } catch (error) {
-      console.error('Failed to fetch categories:', error)
-    }
-  }
-
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault()
     // Search will be handled by useEffect with debounce
-  }
+  }, [])
 
-  const handleCategoryChange = (category: string) => {
+  const handleCategoryChange = useCallback((category: string) => {
     setSelectedCategory(category === selectedCategory ? '' : category)
     // Category change will be handled by useEffect with debounce
-  }
+  }, [selectedCategory])
+
+  // Input change handlers
+  const handleSearchTermChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value)
+  }, [])
+
+  const handleEmailChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    handleInputChange('email', e.target.value)
+  }, [handleInputChange])
+
+  const handlePasswordChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    handleInputChange('password', e.target.value)
+  }, [handleInputChange])
+
+  const handleFullNameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    handleInputChange('fullName', e.target.value)
+  }, [handleInputChange])
+
+  // Validation for WhatsApp number
+  const validateWhatsappNumber = useCallback((number: string) => {
+    if (!number) return true // Allow empty for optional field
+    if (number.length < 10) return false
+    if (number.length > 12) return false
+    if (!number.startsWith('08')) return false
+    // Check if it's all numbers
+    if (!/^\d+$/.test(number)) return false
+    return true
+  }, [])
+
+  const handleWhatsappChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    
+    // Only allow numbers and limit to 12 characters
+    let numericValue = value.replace(/\D/g, '').slice(0, 12)
+    
+    // If user starts typing and it doesn't start with 08, force it to start with 08
+    if (numericValue && !numericValue.startsWith('08') && numericValue.length > 0) {
+      // If user types 8, convert to 08
+      if (numericValue.startsWith('8')) {
+        numericValue = '0' + numericValue
+      } else {
+        // If user types other numbers, force to start with 08
+        numericValue = '08' + numericValue
+      }
+    }
+    
+    handleInputChange('whatsappNumber', numericValue)
+    
+    // Validate and set error
+    if (numericValue && !validateWhatsappNumber(numericValue)) {
+      setWhatsappError('Nomor WhatsApp harus dimulai dengan 08 dan minimal 10 digit')
+    } else {
+      setWhatsappError('')
+    }
+  }, [handleInputChange, validateWhatsappNumber])
+
+  const handleForgotPasswordEmailChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setForgotPasswordData(prev => ({ ...prev, email: e.target.value }))
+  }, [])
+
+  const handleForgotPasswordOtpChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setForgotPasswordData(prev => ({ ...prev, otpCode: e.target.value }))
+  }, [])
+
+  const handleForgotPasswordNewPasswordChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setForgotPasswordData(prev => ({ ...prev, newPassword: e.target.value }))
+  }, [])
+
+  const handleForgotPasswordConfirmPasswordChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setForgotPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))
+  }, [])
+
+  const handleForgotPasswordStep1 = useCallback(() => {
+    setForgotPasswordStep(1)
+  }, [])
+
+  const handleForgotPasswordStep2 = useCallback(() => {
+    setForgotPasswordStep(2)
+  }, [])
+
+  const handleShowForgotPassword = useCallback(() => {
+    setShowForgotPassword(true)
+  }, [])
 
   const features = [
     {
@@ -575,20 +702,26 @@ export default function LandingPage() {
                       type="text"
                       placeholder="Masukkan nama lengkap"
                       value={formData.fullName}
-                      onChange={(e) => handleInputChange('fullName', e.target.value)}
+                      onChange={handleFullNameChange}
                       required={!isLogin}
                     />
                   )}
 
                   {!isLogin && (
-                    <Input
-                      label="Nomor WhatsApp"
-                      type="tel"
-                      placeholder="Contoh: 081234567890"
-                      value={formData.whatsappNumber}
-                      onChange={(e) => handleInputChange('whatsappNumber', e.target.value)}
-                      required={!isLogin}
-                    />
+                    <div>
+                      <Input
+                        label="Nomor WhatsApp"
+                        type="tel"
+                        placeholder="081234567890 (min 10 digit, max 12 digit)"
+                        value={formData.whatsappNumber}
+                        onChange={handleWhatsappChange}
+                        required={!isLogin}
+                        maxLength={12}
+                      />
+                      {whatsappError && (
+                        <p className="text-red-500 text-sm mt-1">{whatsappError}</p>
+                      )}
+                    </div>
                   )}
 
                   <Input
@@ -596,7 +729,7 @@ export default function LandingPage() {
                     type="email"
                     placeholder="Masukkan email"
                     value={formData.email}
-                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    onChange={handleEmailChange}
                     required
                   />
 
@@ -609,7 +742,7 @@ export default function LandingPage() {
                         type={showPassword ? "text" : "password"}
                     placeholder="Masukkan password"
                     value={formData.password}
-                        onChange={(e) => handleInputChange('password', e.target.value)}
+                        onChange={handlePasswordChange}
                     required
                         className="input w-full pr-10"
                       />
@@ -643,7 +776,7 @@ export default function LandingPage() {
                     <div>
                       <button
                         type="button"
-                        onClick={() => setShowForgotPassword(true)}
+                        onClick={handleShowForgotPassword}
                         className="text-sm text-gray-600 hover:text-primary-600 dark:text-gray-400 dark:hover:text-primary-400"
                       >
                         Lupa password?
@@ -692,7 +825,7 @@ export default function LandingPage() {
                     type="text"
                     placeholder="Cari aplikasi..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={handleSearchTermChange}
                     className="pl-10 w-full"
                   />
                 </div>
@@ -1071,7 +1204,7 @@ export default function LandingPage() {
                   type="email"
                   placeholder="Masukkan email"
                   value={forgotPasswordData.email}
-                  onChange={(e) => setForgotPasswordData(prev => ({ ...prev, email: e.target.value }))}
+                  onChange={handleForgotPasswordEmailChange}
                 />
                 <div className="flex space-x-2">
                   <Button
@@ -1124,7 +1257,7 @@ export default function LandingPage() {
                   label="Kode OTP"
                   placeholder="Masukkan 6 digit kode OTP"
                   value={forgotPasswordData.otpCode}
-                  onChange={(e) => setForgotPasswordData(prev => ({ ...prev, otpCode: e.target.value }))}
+                  onChange={handleForgotPasswordOtpChange}
                   maxLength={6}
                   disabled={otpAttempts >= 6}
                 />
@@ -1159,7 +1292,7 @@ export default function LandingPage() {
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => setForgotPasswordStep(1)}
+                    onClick={handleForgotPasswordStep1}
                   >
                     Kembali
                   </Button>
@@ -1177,14 +1310,14 @@ export default function LandingPage() {
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Masukkan password baru"
                   value={forgotPasswordData.newPassword}
-                  onChange={(e) => setForgotPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
+                  onChange={handleForgotPasswordNewPasswordChange}
                 />
                 <Input
                   label="Konfirmasi Password"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Konfirmasi password baru"
                   value={forgotPasswordData.confirmPassword}
-                  onChange={(e) => setForgotPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                  onChange={handleForgotPasswordConfirmPasswordChange}
                 />
                 <Button
                   variant="ghost"
@@ -1207,7 +1340,7 @@ export default function LandingPage() {
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => setForgotPasswordStep(2)}
+                    onClick={handleForgotPasswordStep2}
                   >
                     Kembali
                   </Button>

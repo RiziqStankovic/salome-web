@@ -210,8 +210,8 @@ npm run start
 Update `.env.local` untuk production:
 
 ```env
-NEXT_PUBLIC_API_URL=https://api.salome.id/api/v1
-NEXT_PUBLIC_APP_URL=https://salome.id
+NEXT_PUBLIC_API_URL=https://api.salome.cloudfren.id/api/v1
+NEXT_PUBLIC_APP_URL=https://salome.cloudfren.id
 NEXT_PUBLIC_ENVIRONMENT=production
 ```
 
@@ -243,8 +243,8 @@ NEXT_PUBLIC_ENVIRONMENT=production
 
 ## 📞 Support
 
-- **Email**: support@salome.id
-- **Documentation**: [docs.salome.id](https://docs.salome.id)
+- **Email**: support@salome.cloudfren.id
+- **Documentation**: [docs.salome.cloudfren.id](https://docs.salome.cloudfren.id)
 - **Issues**: [GitHub Issues](https://github.com/salome/issues)
 
 ---

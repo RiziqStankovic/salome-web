@@ -163,7 +163,7 @@ export default function BantuanPage() {
                 Email Support
               </h3>
               <p className="text-gray-600 dark:text-gray-300 mb-4">
-                Kirim email ke support@salome.id
+                Kirim email ke support@salome.cloudfren.id
               </p>
               <Link href="/support/kontak">
                 <Button variant="outline" className="w-full">

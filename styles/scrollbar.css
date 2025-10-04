@@ -1,0 +1,299 @@
+/* Custom Scrollbar Styles */
+.custom-scrollbar {
+  /* Webkit browsers (Chrome, Safari, Edge) */
+  scrollbar-width: thin;
+  scrollbar-color: #6366f1 #f1f5f9;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #6366f1 0%, #8b5cf6 100%);
+  border-radius: 10px;
+  border: 2px solid #f1f5f9;
+  transition: all 0.3s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #4f46e5 0%, #7c3aed 100%);
+  border: 2px solid #e2e8f0;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(180deg, #3730a3 0%, #6d28d9 100%);
+}
+
+/* Dark mode scrollbar */
+.dark .custom-scrollbar {
+  scrollbar-color: #6366f1 #1f2937;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-track {
+  background: #1f2937;
+  border-radius: 10px;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #6366f1 0%, #8b5cf6 100%);
+  border: 2px solid #1f2937;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #4f46e5 0%, #7c3aed 100%);
+  border: 2px solid #374151;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(180deg, #3730a3 0%, #6d28d9 100%);
+}
+
+/* Smooth scrollbar animation */
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Custom scrollbar for Firefox */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #6366f1 #f1f5f9;
+}
+
+.dark .custom-scrollbar {
+  scrollbar-color: #6366f1 #1f2937;
+}
+
+/* Additional smooth scrolling */
+.custom-scrollbar {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Hide scrollbar on mobile but keep functionality */
+@media (max-width: 768px) {
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    border: 1px solid transparent;
+  }
+}
+
+/* Custom scrollbar for specific chat container */
+.chat-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #6366f1 #f8fafc;
+  position: relative;
+}
+
+.chat-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-scrollbar::-webkit-scrollbar-track {
+  background: rgba(248, 250, 252, 0.8);
+  border-radius: 10px;
+  margin: 4px;
+  backdrop-filter: blur(10px);
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, 
+    #6366f1 0%, 
+    #8b5cf6 25%, 
+    #ec4899 50%, 
+    #f59e0b 75%, 
+    #10b981 100%
+  );
+  border-radius: 10px;
+  border: 2px solid rgba(248, 250, 252, 0.9);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  position: relative;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, 
+    #4f46e5 0%, 
+    #7c3aed 25%, 
+    #db2777 50%, 
+    #d97706 75%, 
+    #059669 100%
+  );
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.5);
+  border: 2px solid rgba(248, 250, 252, 1);
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(180deg, 
+    #3730a3 0%, 
+    #6d28d9 25%, 
+    #be185d 50%, 
+    #b45309 75%, 
+    #047857 100%
+  );
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.7);
+}
+
+/* Dark mode for chat scrollbar */
+.dark .chat-scrollbar {
+  scrollbar-color: #6366f1 #0f172a;
+}
+
+.dark .chat-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(10px);
+}
+
+.dark .chat-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, 
+    #6366f1 0%, 
+    #8b5cf6 25%, 
+    #ec4899 50%, 
+    #f59e0b 75%, 
+    #10b981 100%
+  );
+  border: 2px solid rgba(15, 23, 42, 0.9);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+}
+
+.dark .chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, 
+    #4f46e5 0%, 
+    #7c3aed 25%, 
+    #db2777 50%, 
+    #d97706 75%, 
+    #059669 100%
+  );
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.6);
+  border: 2px solid rgba(15, 23, 42, 1);
+}
+
+.dark .chat-scrollbar::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(180deg, 
+    #3730a3 0%, 
+    #6d28d9 25%, 
+    #be185d 50%, 
+    #b45309 75%, 
+    #047857 100%
+  );
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.8);
+}
+
+/* Glow effect for scrollbar */
+.chat-scrollbar::-webkit-scrollbar-thumb::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, 
+    rgba(255, 255, 255, 0.3) 0%, 
+    rgba(255, 255, 255, 0.1) 30%, 
+    rgba(255, 255, 255, 0.05) 50%, 
+    rgba(255, 255, 255, 0.1) 70%, 
+    rgba(255, 255, 255, 0.3) 100%
+  );
+  border-radius: 8px;
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+/* Dark mode glow effect */
+.dark .chat-scrollbar::-webkit-scrollbar-thumb::before {
+  background: linear-gradient(180deg, 
+    rgba(255, 255, 255, 0.2) 0%, 
+    rgba(255, 255, 255, 0.05) 30%, 
+    rgba(255, 255, 255, 0.02) 50%, 
+    rgba(255, 255, 255, 0.05) 70%, 
+    rgba(255, 255, 255, 0.2) 100%
+  );
+}
+
+/* Smooth scrollbar animation */
+.chat-scrollbar::-webkit-scrollbar-thumb {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: scrollbarPulse 3s ease-in-out infinite;
+}
+
+/* Pulse animation for scrollbar */
+@keyframes scrollbarPulse {
+  0%, 100% {
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  }
+  50% {
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.5);
+  }
+}
+
+/* Dark mode pulse animation */
+.dark .chat-scrollbar::-webkit-scrollbar-thumb {
+  animation: scrollbarPulseDark 3s ease-in-out infinite;
+}
+
+@keyframes scrollbarPulseDark {
+  0%, 100% {
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+  }
+  50% {
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.6);
+  }
+}
+
+/* Enhanced hover effects */
+.chat-scrollbar:hover::-webkit-scrollbar-thumb {
+  animation: none;
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
+}
+
+.dark .chat-scrollbar:hover::-webkit-scrollbar-thumb {
+  animation: none;
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.8);
+}
+
+/* Scrollbar corner styling */
+.chat-scrollbar::-webkit-scrollbar-corner {
+  background: rgba(248, 250, 252, 0.8);
+}
+
+.dark .chat-scrollbar::-webkit-scrollbar-corner {
+  background: rgba(15, 23, 42, 0.8);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .chat-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .chat-scrollbar::-webkit-scrollbar-thumb {
+    border: 1px solid rgba(248, 250, 252, 0.8);
+    animation: none; /* Disable animation on mobile for better performance */
+  }
+  
+  .dark .chat-scrollbar::-webkit-scrollbar-thumb {
+    border: 1px solid rgba(15, 23, 42, 0.8);
+    animation: none;
+  }
+}
+
+/* Ultra-wide screens */
+@media (min-width: 1920px) {
+  .chat-scrollbar::-webkit-scrollbar {
+    width: 10px;
+  }
+  
+  .chat-scrollbar::-webkit-scrollbar-thumb {
+    border-radius: 12px;
+  }
+}

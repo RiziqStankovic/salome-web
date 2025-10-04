@@ -15,8 +15,8 @@ import { motion } from 'framer-motion'
 export default function VerifyEmailPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { refreshUser } = useAuth()
-  const email = searchParams.get('email')
+  const { user, refreshUser } = useAuth()
+  const email = searchParams.get('email') || localStorage.getItem('verification_email')
   const purpose = searchParams.get('purpose') || 'email_verification'
 
   const [otp, setOtp] = useState('')
@@ -29,10 +29,31 @@ export default function VerifyEmailPage() {
   const isVerifying = useRef(false)
 
   useEffect(() => {
-    if (!email) {
+    // Get email from URL params or localStorage
+    const emailFromParams = searchParams.get('email')
+    const emailFromStorage = localStorage.getItem('verification_email')
+    const finalEmail = emailFromParams || emailFromStorage
+
+    if (!finalEmail) {
       router.push('/')
       return
     }
+
+    // Check if user is already verified
+    const checkUserStatus = async () => {
+      try {
+        await refreshUser()
+        // If user is already verified, redirect to dashboard
+        if (user?.status === 'active') {
+          window.location.href = '/dashboard'
+          return
+        }
+      } catch (error) {
+        console.error('Error checking user status:', error)
+      }
+    }
+
+    checkUserStatus()
 
     // Start countdown for resend
     setCountdown(60)
@@ -47,7 +68,7 @@ export default function VerifyEmailPage() {
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [email, router])
+  }, [email, router, user?.status, refreshUser, searchParams])
 
   const handleOTPComplete = (otpCode: string) => {
     setOtp(otpCode)
@@ -81,13 +102,22 @@ export default function VerifyEmailPage() {
       if (response.data.valid) {
         setVerified(true)
         setOtpAttempts(0) // reset attempts on success
-        toast.success('Email berhasil diverifikasi!')
+        toast.success('Email berhasil diverifikasi! Mengarahkan ke dashboard...')
         
-        // Refresh user data to update status
-        await refreshUser()
+        // Clear verification email from localStorage
+        localStorage.removeItem('verification_email')
         
-        // Redirect immediately to dashboard
-        router.push('/dashboard')
+        // Refresh user data immediately and redirect
+        try {
+          await refreshUser()
+          
+          // Redirect immediately after successful verification
+          window.location.href = '/dashboard'
+        } catch (error) {
+          console.error('Error refreshing user after OTP verification:', error)
+          // Still redirect even if refresh fails
+          window.location.href = '/dashboard'
+        }
       } else {
         const newAttempts = otpAttempts + 1
         setOtpAttempts(newAttempts)

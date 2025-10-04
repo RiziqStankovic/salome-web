@@ -24,7 +24,26 @@ api.interceptors.request.use(
   }
 )
 
-// Response interceptor - removed to prevent automatic reloads
+// Response interceptor for better error handling
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Handle 401 errors (unauthorized)
+    if (error.response?.status === 401) {
+      // Only clear token if we're not on login/register pages
+      const currentPath = window.location.pathname
+      if (!currentPath.includes('/login') && !currentPath.includes('/register') && !currentPath.includes('/verify-email')) {
+        Cookies.remove('token')
+        // Only redirect if not already on home page
+        if (currentPath !== '/') {
+          window.location.href = '/'
+        }
+      }
+    }
+    
+    return Promise.reject(error)
+  }
+)
 
 // API endpoints
 export const authAPI = {
@@ -239,8 +258,9 @@ export const paymentAPI = {
     api.post('/payments', data),
   
   createGroupPaymentLink: (data: {
-    group_id: string
+    group_id?: string | null
     amount: number
+    description?: string
   }) => 
     api.post('/payments/group-payment-link', data),
   

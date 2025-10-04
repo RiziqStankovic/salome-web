@@ -18,9 +18,21 @@ export default function VerificationGuard({ children, fallback }: VerificationGu
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading && user && user.status !== 'active') {
-      // User is not verified, redirect to verification page
-      router.push(`/verify-email?email=${encodeURIComponent(user.email)}&purpose=email_verification`)
+    if (!loading && user) {
+      // Check if user is verified
+      if (user.status === 'active') {
+        // User is verified, redirect to dashboard if on verify-email page
+        const currentPath = window.location.pathname
+        if (currentPath === '/verify-email') {
+          router.push('/dashboard')
+        }
+      } else {
+        // User is not verified, redirect to verification page
+        const currentPath = window.location.pathname
+        if (currentPath !== '/verify-email') {
+          router.push(`/verify-email?email=${encodeURIComponent(user.email)}&purpose=email_verification`)
+        }
+      }
     }
   }, [user?.status, loading, router]) // Only depend on user.status, not entire user object
 

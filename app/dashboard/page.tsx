@@ -23,6 +23,7 @@ import {
 import { motion } from 'framer-motion'
 import { appAPI, transactionAPI, groupAPI } from '@/lib/api'
 import UserBroadcastWidget from '@/components/UserBroadcastWidget'
+import BalanceCard from '@/components/BalanceCard'
 import { formatCurrency } from '@/lib/utils'
 
 interface RecentActivity {
@@ -39,7 +40,7 @@ export default function DashboardPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
   const [stats, setStats] = useState({
-    balance: 0, // Saldo user (belum ada, jadi 0)
+    balance: 0, // Saldo user dari API transactions
     totalTransactions: 0, // Jumlah transaksi
     totalExpenses: 0, // Total pengeluaran
     pendingPayments: 0 // Pembayaran pending
@@ -70,9 +71,12 @@ export default function DashboardPage() {
 
   // Calculate stats when transactions data changes
   useEffect(() => {
-    if (transactions.length > 0) {
-      calculateStats()
+    const updateStats = async () => {
+      if (transactions.length > 0) {
+        await calculateStats()
+      }
     }
+    updateStats()
   }, [transactions])
 
   const fetchPopularApps = async () => {
@@ -111,69 +115,113 @@ export default function DashboardPage() {
     }
   }
 
-  const calculateStats = () => {
-    if (!Array.isArray(transactions) || transactions.length === 0) {
+  const calculateStats = async () => {
+    try {
+      // Get saldo from transactions API
+      const response = await transactionAPI.getUserTransactions({
+        page: 1,
+        page_size: 1
+      })
+      const saldo = response.data.saldo || 0
+      
+      if (!Array.isArray(transactions) || transactions.length === 0) {
+        setStats({
+          balance: saldo,
+          totalTransactions: 0,
+          totalExpenses: 0,
+          pendingPayments: 0
+        })
+        return
+      }
+
+      const totalTransactions = transactions.length
+      const totalExpenses = (transactions as any[]).reduce((sum, transaction) => {
+        return sum + (transaction.amount || 0)
+      }, 0)
+      
+      const pendingPayments = (transactions as any[]).filter((transaction: any) => 
+        transaction.status === 'pending'
+      ).length
+
+      setStats({
+        balance: saldo,
+        totalTransactions,
+        totalExpenses,
+        pendingPayments
+      })
+    } catch (error) {
+      console.error('Error calculating stats:', error)
+      // Fallback to current stats without saldo update
+      if (!Array.isArray(transactions) || transactions.length === 0) {
+        setStats(prev => ({
+          ...prev,
+          balance: 0
+        }))
+        return
+      }
+
+      const totalTransactions = transactions.length
+      const totalExpenses = (transactions as any[]).reduce((sum, transaction) => {
+        return sum + (transaction.amount || 0)
+      }, 0)
+      
+      const pendingPayments = (transactions as any[]).filter((transaction: any) => 
+        transaction.status === 'pending'
+      ).length
+
       setStats({
         balance: 0,
-        totalTransactions: 0,
-        totalExpenses: 0,
-        pendingPayments: 0
+        totalTransactions,
+        totalExpenses,
+        pendingPayments
       })
-      return
     }
-
-    const totalTransactions = transactions.length
-    const totalExpenses = (transactions as any[]).reduce((sum, transaction) => {
-      return sum + (transaction.amount || 0)
-    }, 0)
-    
-    const pendingPayments = (transactions as any[]).filter((transaction: any) => 
-      transaction.status === 'pending'
-    ).length
-
-    setStats({
-      balance: 0, // Belum ada saldo system
-      totalTransactions,
-      totalExpenses,
-      pendingPayments
-    })
   }
 
   const generateRecentActivities = (): RecentActivity[] => {
     const activities: RecentActivity[] = []
     
-    // Add recent transactions
+    // Add recent transactions (up to 2)
     if (Array.isArray(transactions) && transactions.length > 0) {
-      (transactions as any[]).slice(0, 1).forEach((transaction: any) => {
-      const statusText = transaction.status === 'success' ? 'berhasil' : 
-                        transaction.status === 'pending' ? 'pending' : 
-                        transaction.status === 'failed' ? 'gagal' : transaction.status
-      
-      activities.push({
-        id: `txn-${transaction.id}`,
-        type: 'transaction' as const,
-        title: `Pembayaran ${transaction.app_name || 'Aplikasi'} ${statusText}`,
-        description: `Rp ${formatCurrency(transaction.amount)}`,
-        timestamp: transaction.created_at,
-        status: transaction.status,
-        icon: transaction.status === 'success' ? 'success' as const : 
-              transaction.status === 'pending' ? 'warning' as const : 'error' as const
-      })
+      (transactions as any[]).slice(0, 2).forEach((transaction: any) => {
+        const statusText = transaction.status === 'success' || transaction.status === 'completed' ? 'berhasil' : 
+                          transaction.status === 'pending' ? 'pending' : 
+                          transaction.status === 'failed' ? 'gagal' : transaction.status
+        
+        const transactionType = transaction.type === 'top-up' ? 'Top Up' : 
+                               transaction.type === 'group_payment' ? 'Pembayaran Grup' : 
+                               'Transaksi'
+        
+        activities.push({
+          id: `txn-${transaction.id}`,
+          type: 'transaction' as const,
+          title: `${transactionType} ${statusText}`,
+          description: `${formatCurrency(transaction.amount)}${transaction.description ? ` - ${transaction.description}` : ''}`,
+          timestamp: transaction.created_at,
+          status: transaction.status,
+          icon: transaction.status === 'success' || transaction.status === 'completed' ? 'success' as const : 
+                transaction.status === 'pending' ? 'warning' as const : 'error' as const
+        })
       })
     }
     
-    // Add recent groups (created or joined)
+    // Add recent groups (up to 1)
     if (Array.isArray(userGroups) && userGroups.length > 0) {
       (userGroups as any[]).slice(0, 1).forEach((group: any) => {
-      activities.push({
-        id: `group-${group.id}`,
-        type: 'group' as const,
-        title: `Grup "${group.name}" ${group.group_status === 'paid_group' ? 'lunas' : 'dibuat'}`,
-        description: `${group.app_name || 'Aplikasi'} - ${group.current_members}/${group.max_members} anggota`,
-        timestamp: group.created_at,
-        status: group.group_status,
-        icon: group.group_status === 'paid_group' ? 'success' as const : 'primary' as const
-      })
+        const groupStatus = group.group_status === 'paid_group' ? 'lunas' : 
+                           group.group_status === 'active' ? 'aktif' : 
+                           group.group_status === 'pending' ? 'menunggu' : 'dibuat'
+        
+        activities.push({
+          id: `group-${group.id}`,
+          type: 'group' as const,
+          title: `Grup "${group.name}" ${groupStatus}`,
+          description: `${group.app_name || 'Aplikasi'} - ${group.current_members}/${group.max_members} anggota`,
+          timestamp: group.created_at,
+          status: group.group_status,
+          icon: group.group_status === 'paid_group' ? 'success' as const : 
+                group.group_status === 'active' ? 'primary' as const : 'warning' as const
+        })
       })
     }
     
@@ -227,54 +275,67 @@ export default function DashboardPage() {
           transition={{ duration: 0.6, delay: 0.1 }}
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
         >
+          <BalanceCard />
+
           <Card className="p-6">
-            <div className="flex items-center">
-              <div className="p-2 bg-primary-100 dark:bg-primary-900 rounded-lg">
-                <Wallet className="h-6 w-6 text-primary-600 dark:text-primary-400" />
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <div className="w-12 h-12 bg-success-100 dark:bg-success-900/30 rounded-lg flex items-center justify-center mr-4">
+                  <Users className="w-6 h-6 text-success-600 dark:text-success-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Jumlah Transaksi
+                  </h3>
+                </div>
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Saldo</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  Rp 0
-                </p>
+            </div>
+
+            <div className="mb-6">
+              <div className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                {stats.totalTransactions}
               </div>
             </div>
           </Card>
 
           <Card className="p-6">
-            <div className="flex items-center">
-              <div className="p-2 bg-success-100 dark:bg-success-900 rounded-lg">
-                <Users className="h-6 w-6 text-success-600 dark:text-success-400" />
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <div className="w-12 h-12 bg-warning-100 dark:bg-warning-900/30 rounded-lg flex items-center justify-center mr-4">
+                  <TrendingUp className="w-6 h-6 text-warning-600 dark:text-warning-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Total Pengeluaran
+                  </h3>
+                </div>
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Jumlah Transaksi</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalTransactions}</p>
+            </div>
+
+            <div className="mb-6">
+              <div className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                {formatCurrency(stats.totalExpenses)}
               </div>
             </div>
           </Card>
 
           <Card className="p-6">
-            <div className="flex items-center">
-              <div className="p-2 bg-warning-100 dark:bg-warning-900 rounded-lg">
-                <TrendingUp className="h-6 w-6 text-warning-600 dark:text-warning-400" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Pengeluaran</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(stats.totalExpenses)}</p>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <div className="w-12 h-12 bg-error-100 dark:bg-error-900/30 rounded-lg flex items-center justify-center mr-4">
+                  <History className="w-6 h-6 text-error-600 dark:text-error-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Pembayaran Pending
+                  </h3>
+                </div>
               </div>
             </div>
-          </Card>
 
-          <Card className="p-6">
-            <div className="flex items-center">
-              <div className="p-2 bg-error-100 dark:bg-error-900 rounded-lg">
-                <History className="h-6 w-6 text-error-600 dark:text-error-400" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Pembayaran Pending</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {stats.pendingPayments}
-                </p>
+            <div className="mb-6">
+              <div className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                {stats.pendingPayments}
               </div>
             </div>
           </Card>
@@ -327,7 +388,16 @@ export default function DashboardPage() {
           </Card>
 
           <Card className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Activity</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Activity</h3>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push('/transactions')}
+              >
+                Lihat Semua
+              </Button>
+            </div>
             <div className="space-y-3">
               {loadingTransactions || loadingGroups ? (
                 <div className="flex items-center justify-center py-4">
@@ -362,12 +432,34 @@ export default function DashboardPage() {
                   }
 
                   return (
-                    <div key={activity.id} className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                      <div className={`w-2 h-2 ${getIconColor()} rounded-full`}></div>
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-900 dark:text-white">{activity.title}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{activity.description}</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{timeText}</p>
+                    <div key={activity.id} className="flex items-start space-x-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                      <div className={`w-3 h-3 ${getIconColor()} rounded-full mt-1 flex-shrink-0`}></div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {activity.title}
+                          </p>
+                          <span className="text-xs text-gray-400 dark:text-gray-500 ml-2 flex-shrink-0">
+                            {timeText}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+                          {activity.description}
+                        </p>
+                        {activity.type === 'transaction' && (
+                          <div className="flex items-center mt-2">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              activity.status === 'success' || activity.status === 'completed'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                : activity.status === 'pending'
+                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                                : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                            }`}>
+                              {activity.status === 'success' || activity.status === 'completed' ? 'Berhasil' :
+                               activity.status === 'pending' ? 'Pending' : 'Gagal'}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )

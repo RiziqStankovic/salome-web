@@ -3,6 +3,8 @@
 import { createContext, useContext, useEffect, useState, useRef, ReactNode, useMemo, useCallback } from 'react'
 import Cookies from 'js-cookie'
 import { api, otpAPI } from '@/lib/api'
+import { cache, CACHE_KEYS, invalidateUserCache } from '@/lib/cache'
+import { debounce } from '@/lib/debounce'
 
 interface User {
   id: string
@@ -59,15 +61,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchUser = useCallback(async () => {
     if (isFetching.current) return
     
+    // Check cache first
+    const cachedUser = cache.get<User>(CACHE_KEYS.USER_PROFILE)
+    if (cachedUser) {
+      setUser(cachedUser)
+      setLoading(false)
+      return
+    }
+    
     try {
       setFetching(true)
       isFetching.current = true
       const response = await api.get('/auth/profile')
-      setUser(response.data.user)
+      const userData = response.data.user
+      
+      // Cache user data for 5 minutes
+      cache.set(CACHE_KEYS.USER_PROFILE, userData, 5 * 60 * 1000)
+      setUser(userData)
     } catch (error) {
       console.error('Failed to fetch user:', error)
       Cookies.remove('token')
       setUser(null)
+      // Clear cache on error
+      cache.delete(CACHE_KEYS.USER_PROFILE)
     } finally {
       setLoading(false)
       setFetching(false)
@@ -81,7 +97,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { token, user } = response.data
       
       Cookies.set('token', token, { expires: 7 })
+      
+      // Cache user data
+      cache.set(CACHE_KEYS.USER_PROFILE, user, 5 * 60 * 1000)
       setUser(user)
+      
       // Remove router.push to prevent re-render
       window.location.href = '/dashboard'
     } catch (error: any) {
@@ -112,8 +132,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('verification_email', email)
       
       Cookies.set('token', token, { expires: 7 })
+      
+      // Cache user data
+      cache.set(CACHE_KEYS.USER_PROFILE, user, 5 * 60 * 1000)
       setUser(user)
-      window.location.href = '/verify-email'
+      
+      // Don't redirect here - let the calling component handle the redirect
+      // This prevents conflict with router.push in LandingPage
     } catch (error: any) {
       throw new Error(error.response?.data?.error || 'Registration failed')
     }
@@ -124,6 +149,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await otpAPI.verify(email, otp, 'email_verification')
       
       if (response.data.valid) {
+        // Invalidate user cache to force refresh
+        invalidateUserCache()
+        
         // Refresh user data after successful verification
         await fetchUser()
         window.location.href = '/dashboard'
@@ -146,16 +174,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateProfile = async (data: Partial<User>) => {
     try {
       const response = await api.put('/auth/profile', data)
-      setUser(response.data.user)
+      const updatedUser = response.data.user
+      
+      // Update cache with new user data
+      cache.set(CACHE_KEYS.USER_PROFILE, updatedUser, 5 * 60 * 1000)
+      setUser(updatedUser)
     } catch (error: any) {
       throw new Error(error.response?.data?.error || 'Failed to update profile')
     }
   }
 
-  const refreshUser = async () => {
-    if (fetching || isFetching.current || !Cookies.get('token')) return
-    await fetchUser()
-  }
+    // Force refresh user data from server (bypass cache)
+  const refreshUser = useCallback(async () => {
+    if (isFetching.current || !Cookies.get('token')) return
+    
+    try {
+      setFetching(true)
+      isFetching.current = true
+      
+      // Always fetch from server, don't use cache
+      const response = await api.get('/auth/profile')
+      const userData = response.data.user
+      
+      // Update cache with fresh data
+      cache.set(CACHE_KEYS.USER_PROFILE, userData, 5 * 60 * 1000)
+      setUser(userData)
+    } catch (error) {
+      console.error('Failed to refresh user:', error)
+      // Don't clear token on refresh error, just log it
+    } finally {
+      setFetching(false)
+      isFetching.current = false
+    }
+  }, [])
 
   const logout = () => {
     Cookies.remove('token')
@@ -163,6 +214,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     hasFetched.current = false
     isInitialized.current = false
     isFetching.current = false
+    
+    // Clear all caches
+    cache.clear()
+    
     // Remove router.push to prevent re-render
     window.location.href = '/'
   }

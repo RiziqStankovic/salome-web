@@ -24,6 +24,7 @@ import { transactionAPI } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 import DashboardLayout from '@/components/DashboardLayout'
 import { useAuth } from '@/contexts/AuthContext'
+import TopUpModal from '@/components/TopUpModal'
 
 interface Transaction {
   id: string
@@ -42,10 +43,20 @@ interface Transaction {
   updated_at: string
 }
 
+interface TransactionResponse {
+  saldo: number
+  transactions: Transaction[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+}
+
 export default function TransactionsPage() {
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [saldo, setSaldo] = useState<number>(0)
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedType, setSelectedType] = useState('')
@@ -58,6 +69,7 @@ export default function TransactionsPage() {
     topUpAmount: 0,
     spentAmount: 0
   })
+  const [showTopUpModal, setShowTopUpModal] = useState(false)
   const transactionsFetched = useRef(false)
 
   const transactionTypes = [
@@ -109,11 +121,12 @@ export default function TransactionsPage() {
         page,
         page_size: 20
       })
-      const transactionsData = response.data.transactions || []
-      
+      const responseData: TransactionResponse = response.data
+      const transactionsData = responseData.transactions || []
       
       setTransactions(transactionsData)
-      setTotalPages(response.data.total_pages || 1)
+      setSaldo(responseData.saldo || 0)
+      setTotalPages(responseData.total_pages || 1)
       
       // Calculate stats
       const totalAmount = transactionsData.reduce((sum: number, t: Transaction) => sum + t.amount, 0)
@@ -311,13 +324,40 @@ export default function TransactionsPage() {
             </p>
           </div>
           <Button
-            onClick={() => router.push('/top-up')}
+            onClick={() => setShowTopUpModal(true)}
             className="flex items-center space-x-2"
           >
             <Plus className="h-5 w-5" />
             <span>Top Up Saldo</span>
           </Button>
         </div>
+
+        {/* Saldo Card */}
+        <Card className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                <Wallet className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Saldo Anda
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Saldo saat ini
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                {formatCurrency(saldo)}
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Tersedia
+              </p>
+            </div>
+          </div>
+        </Card>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -549,6 +589,16 @@ export default function TransactionsPage() {
             </Button>
           </div>
         )}
+
+        {/* Top Up Modal */}
+        <TopUpModal
+          isOpen={showTopUpModal}
+          onClose={() => setShowTopUpModal(false)}
+          onSuccess={() => {
+            setShowTopUpModal(false)
+            fetchTransactions() // Refresh transactions after successful top-up
+          }}
+        />
       </div>
     </DashboardLayout>
   )

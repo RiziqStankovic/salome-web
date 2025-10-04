@@ -6,6 +6,10 @@ import { AuthProvider } from '@/contexts/AuthContext'
 import { ConfettiProvider } from '@/contexts/ConfettiContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import ChatWidget from '@/components/ChatWidget'
+import Favicon from '@/components/Favicon'
+import { initializePerformanceOptimizations } from '@/lib/performance'
+import { initializeAnalytics, trackPerformance, trackSessionDuration } from '@/lib/analytics'
+import { initializeSEOMonitoring } from '@/lib/seo-monitoring'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -15,7 +19,7 @@ export const metadata: Metadata = {
     default: 'SALOME - Patungan Akun SaaS Bersama',
     template: '%s | SALOME'
   },
-  description: 'Platform terpercaya untuk patungan dan sharing akun aplikasi SaaS bersama teman-teman. Hemat hingga 90% dengan sistem pembagian biaya yang adil dan aman. Dukung Midtrans, aman, dan mudah digunakan.',
+  description: 'Solusi Patungan Satu Software Rame - Rame. Tanpa Ribet pembayaran Tanpa susah cari teman patungan. Amanah, mudah, dan terpercaya.',
   keywords: [
     'patungan saas',
     'sharing subscription',
@@ -32,7 +36,7 @@ export const metadata: Metadata = {
     'patungan adobe',
     'patungan microsoft office'
   ],
-  authors: [{ name: 'SALOME Team', url: 'https://salome.id' }],
+  authors: [{ name: 'SALOME Team', url: 'https://salome.cloudfren.id' }],
   creator: 'SALOME Team',
   publisher: 'SALOME',
   formatDetection: {
@@ -46,10 +50,10 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'id_ID',
-    url: 'https://salome.id',
+    url: 'https://salome.cloudfren.id',
     siteName: 'SALOME',
     title: 'SALOME - Patungan Akun SaaS Bersama',
-    description: 'Platform terpercaya untuk patungan dan sharing akun aplikasi SaaS bersama teman-teman. Hemat hingga 90% dengan sistem pembagian biaya yang adil dan aman.',
+    description: 'Solusi Patungan Satu Software Rame - Rame. Tanpa Ribet pembayaran Tanpa susah cari teman patungan. Amanah, mudah, dan terpercaya.',
     images: [
       {
         url: '/og-image.jpg',
@@ -62,7 +66,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'SALOME - Patungan Akun SaaS Bersama',
-    description: 'Platform terpercaya untuk patungan dan sharing akun aplikasi SaaS bersama teman-teman. Hemat hingga 90% dengan sistem pembagian biaya yang adil dan aman.',
+    description: 'Solusi Patungan Satu Software Rame - Rame. Tanpa Ribet pembayaran Tanpa susah cari teman patungan. Amanah, mudah, dan terpercaya.',
     images: ['/og-image.jpg'],
     creator: '@salome_id',
   },
@@ -79,16 +83,31 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicon.ico', sizes: '32x32', type: 'image/x-icon' },
       { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
     ],
     apple: [
-      { url: '/apple-touch-icon.png', sizes: '180x180' },
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
     ],
+    shortcut: '/favicon.ico',
   },
   manifest: '/site.webmanifest',
   verification: {
     google: 'your-google-verification-code',
+  },
+  other: {
+    'msapplication-TileColor': '#3B82F6',
+    'msapplication-config': '/browserconfig.xml',
+    'theme-color': '#3B82F6',
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'default',
+    'apple-mobile-web-app-title': 'SALOME',
+    'mobile-web-app-capable': 'yes',
+    'application-name': 'SALOME',
+    'msapplication-tooltip': 'Platform patungan akun SaaS bersama',
+    'msapplication-starturl': '/',
   },
 }
 
@@ -101,8 +120,8 @@ export default function RootLayout({
     "@context": "https://schema.org",
     "@type": "WebApplication",
     "name": "SALOME",
-    "description": "Platform terpercaya untuk patungan dan sharing akun aplikasi SaaS bersama teman-teman. Hemat hingga 90% dengan sistem pembagian biaya yang adil dan aman.",
-    "url": "https://salome.id",
+    "description": "Solusi Patungan Satu Software Rame - Rame. Tanpa Ribet pembayaran Tanpa susah cari teman patungan. Amanah, mudah, dan terpercaya.",
+    "url": "https://salome.cloudfren.id",
     "applicationCategory": "BusinessApplication",
     "operatingSystem": "Web Browser",
     "offers": {
@@ -127,9 +146,24 @@ export default function RootLayout({
   return (
     <html lang="id" suppressHydrationWarning>
       <head>
+        <Favicon />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Initialize performance optimizations
+              if (typeof window !== 'undefined') {
+                ${initializePerformanceOptimizations.toString()}();
+                ${initializeAnalytics.toString()}();
+                ${trackPerformance.toString()}();
+                ${trackSessionDuration.toString()}();
+                ${initializeSEOMonitoring.toString()}();
+              }
+            `
+          }}
         />
       </head>
       <body className={inter.className}>
